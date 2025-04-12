@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
@@ -72,6 +71,10 @@ const SpaDetailScreen = () => {
       console.log('Bình luận:', comment);
       setComment('');
     }
+  };
+
+  const handleBookNow = () => {
+    navigation.navigate('screen/booking', { spa: spaData });
   };
 
   const renderCarouselItem = ({ item, index }) => (
@@ -194,6 +197,11 @@ const SpaDetailScreen = () => {
           </View>
         </View>
       </ScrollView>
+
+      {/* Nút Đặt lịch cố định */}
+      <TouchableOpacity style={styles.bookButton} onPress={handleBookNow}>
+        <Text style={styles.bookButtonText}>Đặt lịch ngay</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 };
@@ -208,7 +216,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   scrollViewContent: {
-    paddingBottom: 20,
+    paddingBottom: 80, // Tăng paddingBottom để không bị che bởi nút Đặt lịch
   },
   sliderContainer: {
     height: width * 0.6,
@@ -218,26 +226,23 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     elevation: 5,
     backgroundColor: '#fff',
-    overflow: 'visible', 
-    borderRadius: 0, 
+    overflow: 'visible',
+    borderRadius: 0,
   },
-  
   carouselItem: {
     width: width,
     height: width * 0.6,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'visible',
-    borderRadius: 0, 
+    borderRadius: 0,
   },
-  
   spaImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
-    borderRadius: 0, 
+    borderRadius: 0,
   },
-  
   loader: {
     position: 'absolute',
     top: '50%',
@@ -334,6 +339,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     paddingVertical: 5,
+  },
+  bookButton: {
+    position: 'absolute',
+    bottom: 20,
+    left: 15,
+    right: 15,
+    backgroundColor: Colors.pink,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  bookButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
 

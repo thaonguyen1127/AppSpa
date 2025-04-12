@@ -94,7 +94,7 @@ const BookingHistoryScreen = () => {
   };
 
   const goToSpaDetail = (spa) => {
-    navigation.navigate('owner/spaDetail', { spa }); // Hoặc `{ spaId: spa.id }` nếu bạn dùng id
+    navigation.navigate('screen/spaDetail', { spa }); // Hoặc `{ spaId: spa.id }` nếu bạn dùng id
   };
 
   return (

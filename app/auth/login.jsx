@@ -8,6 +8,8 @@ import {
   Image,
   Alert,
   StatusBar,
+  SafeAreaView,
+  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
@@ -45,13 +47,13 @@ const LoginScreen = () => {
           router.replace('/admin/dashboard');
           break;
         case 'owner':
-          router.replace('/owner/spaDetail'); 
+          router.replace('/owner/spaDetail');
           break;
         case 'user':
-          router.replace('/user/home'); 
+          router.replace('/user/home');
           break;
         default:
-          router.replace('/user/home'); 
+          router.replace('/user/home');
           break;
       }
 
@@ -88,101 +90,110 @@ const LoginScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar backgroundColor="transparent" translucent barStyle="dark-content" />
-      <View style={styles.spacer} />
-      <Image
-        source={require('../../assets/images/logo.png')}
-        style={styles.logo}
+    <SafeAreaView style={styles.container}>
+      <StatusBar
+        backgroundColor={Colors.lightPink}
+        barStyle="dark-content"
+        translucent={true}
       />
-      <Text style={styles.title}>Đăng Nhập</Text>
-
-      <View style={styles.inputContainer}>
-        <Icon name="email" size={20} color={Colors.gray} style={styles.icon} />
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor={Colors.gray}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
+      <View style={styles.content}>
+        <Image
+          source={require('../../assets/images/logo.png')}
+          style={styles.logo}
         />
-      </View>
+        <Text style={styles.title}>Đăng Nhập</Text>
 
-      <View style={styles.inputContainer}>
-        <Icon name="lock" size={20} color={Colors.gray} style={styles.icon} />
-        <TextInput
-          style={styles.input}
-          placeholder="Mật khẩu"
-          placeholderTextColor={Colors.gray}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry={!showPassword}
-        />
-        <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-          <Icon
-            name={showPassword ? 'visibility' : 'visibility-off'}
-            size={20}
-            color={Colors.gray}
+        <View style={styles.inputContainer}>
+          <Icon name="email" size={20} color={Colors.gray} style={styles.icon} />
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor={Colors.gray}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
           />
-        </TouchableOpacity>
-      </View>
+        </View>
 
-      <View style={styles.checkboxContainer}>
-        <TouchableOpacity
-          style={styles.checkbox}
-          onPress={() => setRememberMe(!rememberMe)}
-        >
-          <Icon
-            name={rememberMe ? 'check-box' : 'check-box-outline-blank'}
-            size={20}
-            color={Colors.pink}
+        <View style={styles.inputContainer}>
+          <Icon name="lock" size={20} color={Colors.gray} style={styles.icon} />
+          <TextInput
+            style={styles.input}
+            placeholder="Mật khẩu"
+            placeholderTextColor={Colors.gray}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
           />
-          <Text style={styles.checkboxText}>Lưu mật khẩu</Text>
+          <TouchableOpacity
+            onPress={() => setShowPassword(!showPassword)}
+            style={styles.eyeIcon}
+          >
+            <Icon
+              name={showPassword ? 'visibility' : 'visibility-off'}
+              size={20}
+              color={Colors.gray}
+            />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.checkboxContainer}>
+          <TouchableOpacity
+            style={styles.checkbox}
+            onPress={() => setRememberMe(!rememberMe)}
+          >
+            <Icon
+              name={rememberMe ? 'check-box' : 'check-box-outline-blank'}
+              size={20}
+              color={Colors.pink}
+            />
+            <Text style={styles.checkboxText}>Lưu mật khẩu</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={handleForgotPassword}>
+            <Text style={styles.forgotPasswordLink}>Quên mật khẩu?</Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity style={styles.button} onPress={handleLogin}>
+          <Text style={styles.buttonText}>Đăng Nhập</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={handleForgotPassword}>
-          <Text style={styles.forgotPasswordLink}>Quên mật khẩu?</Text>
+        <Text style={styles.orText}>Hoặc</Text>
+
+        <TouchableOpacity style={[styles.socialButton, styles.googleButton]}>
+          <FontAwesome name="google" size={20} color={Colors.white} />
+          <Text style={styles.socialButtonText}>Đăng nhập bằng Google</Text>
         </TouchableOpacity>
+
+        <View style={styles.registerContainer}>
+          <Text style={styles.registerText}>Bạn chưa có tài khoản? </Text>
+          <TouchableOpacity onPress={handleRegister}>
+            <Text style={styles.registerLink}>Đăng ký</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-
-      <TouchableOpacity style={styles.button} onPress={handleLogin}>
-        <Text style={styles.buttonText}>Đăng Nhập</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.orText}>Hoặc</Text>
-
-      <TouchableOpacity style={[styles.socialButton, styles.googleButton]}>
-        <FontAwesome name="google" size={20} color={Colors.white} />
-        <Text style={styles.socialButtonText}>Đăng nhập bằng Google</Text>
-      </TouchableOpacity>
-
-      <View style={styles.registerContainer}>
-        <Text style={styles.registerText}>Bạn chưa có tài khoản? </Text>
-        <TouchableOpacity onPress={handleRegister}>
-          <Text style={styles.registerLink}>Đăng ký</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
     backgroundColor: Colors.lightPink,
-    padding: 20,
-    paddingTop: 0,
   },
-  spacer: {
-    height: 40,
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 20 : 0, // Giảm paddingTop cho Android
   },
   logo: {
     width: 100,
     height: 100,
     marginBottom: 20,
+    marginTop: 20,
   },
   title: {
     fontSize: 32,

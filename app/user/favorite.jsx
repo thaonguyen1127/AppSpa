@@ -47,7 +47,7 @@ const FavoriteScreen = () => {
   };
 
   const handleSpaPress = (spa) => {
-    navigation.navigate('owner/spaDetail', { spa });
+    navigation.navigate('screen/spaDetail', { spa });
   };
 
   return (
