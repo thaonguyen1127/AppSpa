@@ -23,4 +23,12 @@ export const Colors = {
     tabIconDefault: '#9BA1A6',
     tabIconSelected: tintColorDark,
   },
+  lightPink: '#FFE6F0', // Nền hồng nhạt
+  pink: '#FF99B9',      // Link "Quên mật khẩu" và checkbox
+  darkPink: '#FF6699',  // Nút "Đăng Nhập"
+  white: '#FFFFFF',     // Ô nhập liệu
+  black: '#333333',     // Chữ tiêu đề và checkbox
+  gray: '#8E8E93',     
+  successGreen: '#4CAF50', // Màu xanh đặc trưng cho thành công
+  errorRed: '#F44336',
 };
