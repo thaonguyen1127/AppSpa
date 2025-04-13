@@ -57,27 +57,27 @@
 // }
 
 // app/_layout.js
-// app/_layout.js
 import { Stack } from 'expo-router';
 
 export default function RootLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShown: false, // Ẩn header mặc định cho tất cả các màn hình
+        headerShown: false,
       }}
     >
       <Stack.Screen name="auth/login" />
-      
-      <Stack.Screen name="user" />
+      <Stack.Screen name="auth/register" />
       <Stack.Screen
         name="admin/dashboard"
         options={{ headerShown: true, title: 'Admin Dashboard' }}
       />
       <Stack.Screen
-        name="owner"
+        name="owner/booking"
         options={{ headerShown: true, title: 'Owner Dashboard' }}
       />
+      <Stack.Screen name="user" />
+      <Stack.Screen name="(tabs)" />
     </Stack>
   );
 }

@@ -36,13 +36,14 @@ const notifications = [
 
 const NotificationScreen = () => {
   const router = useRouter();
+  const HEADER_HEIGHT = 60; // Đồng bộ với Favorite, Home, Search
 
   const renderItem = ({ item }) => (
     <View style={styles.notificationItem}>
       <Ionicons
         name="notifications-outline"
         size={24}
-        color="#e91e63"
+        color={Colors.pink}
         style={styles.icon}
       />
       <View style={styles.textContainer}>
@@ -56,28 +57,30 @@ const NotificationScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar
-        backgroundColor="transparent"
-        translucent
+        backgroundColor={Colors.pink}
         barStyle="light-content"
+        translucent={false}
       />
       <LinearGradient
         colors={[Colors.pink, `${Colors.pink}80`, '#fff']}
         style={styles.gradientBackground}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Thông báo</Text>
+        <View style={styles.headerContainer}>
+          <View
+            style={[styles.header, { height: HEADER_HEIGHT}]}
+          >
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Thông báo</Text>
+          </View>
         </View>
 
-        {/* Nội dung */}
         <FlatList
           data={notifications}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingTop: HEADER_HEIGHT }]}
           ListEmptyComponent={
             <Text style={styles.emptyText}>Chưa có thông báo nào</Text>
           }
@@ -87,8 +90,6 @@ const NotificationScreen = () => {
   );
 };
 
-export default NotificationScreen;
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -96,13 +97,18 @@ const styles = StyleSheet.create({
   gradientBackground: {
     flex: 1,
   },
+  headerContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 15,
-    paddingVertical: 2,
-    height: 50,
-    marginTop: StatusBar.currentHeight || 0,
+    paddingVertical: 10,
   },
   backButton: {
     marginRight: 10,
@@ -114,7 +120,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 10,
-    paddingTop: 10,
     paddingBottom: 20,
   },
   notificationItem: {
@@ -139,7 +144,7 @@ const styles = StyleSheet.create({
   title: {
     fontWeight: 'bold',
     fontSize: 16,
-    color: '#e91e63',
+    color: Colors.pink,
     marginBottom: 2,
   },
   message: {
@@ -158,3 +163,5 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
 });
+
+export default NotificationScreen;

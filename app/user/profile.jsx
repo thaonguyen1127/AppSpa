@@ -27,6 +27,7 @@ const ProfileScreen = () => {
     address: '123 Đường Hoa Hồng, Quận 1, TP.HCM',
     avatar: 'https://i.pravatar.cc/150?img=3',
   });
+  const HEADER_HEIGHT = 60; // Đồng bộ với Favorite, Notification, BookingHistory, Booking
 
   const handleEdit = () => setIsEditing(!isEditing);
   const handleChange = (field, value) => {
@@ -47,82 +48,88 @@ const ProfileScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar backgroundColor="transparent" translucent barStyle="light-content" />
+      <StatusBar
+        backgroundColor={Colors.pink}
+        barStyle="light-content"
+        translucent={false}
+      />
       <LinearGradient
         colors={[Colors.pink, `${Colors.pink}80`, '#fff']}
         style={styles.gradientBackground}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Profile</Text>
+        <View style={styles.headerContainer}>
+          <View style={[styles.header, { height: HEADER_HEIGHT }]}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Hồ sơ</Text>
+          </View>
         </View>
 
-        {/* Nội dung */}
-        <ScrollView style={styles.scrollView}>
-          <View style={styles.profileCard}>
-            {/* Avatar + Tên */}
-            <View style={styles.userInfo}>
-              <Image source={{ uri: profile.avatar }} style={styles.avatar} />
-              <Text style={styles.name}>{profile.fullName}</Text>
-            </View>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT }]}
+        >
+          <View style={styles.userInfo}>
+            <Image
+              source={{ uri: profile.avatar }}
+              style={styles.avatar}
+              defaultSource={{ uri: 'https://via.placeholder.com/80/CCCCCC/FFFFFF?text=User' }}
+              onError={() => console.log('Failed to load avatar')}
+            />
+            <Text style={styles.name}>{profile.fullName}</Text>
+          </View>
 
-            {/* Form */}
-            <View style={styles.form}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={[styles.input, !isEditing && styles.disabledInput]}
-                editable={isEditing}
-                keyboardType="email-address"
-                value={profile.email}
-                onChangeText={(text) => handleChange('email', text)}
-              />
+          <View style={styles.form}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={[styles.input, !isEditing && styles.disabledInput]}
+              editable={isEditing}
+              keyboardType="email-address"
+              value={profile.email}
+              onChangeText={(text) => handleChange('email', text)}
+            />
 
-              <Text style={styles.label}>Số điện thoại</Text>
-              <TextInput
-                style={[styles.input, !isEditing && styles.disabledInput]}
-                editable={isEditing}
-                keyboardType="phone-pad"
-                value={profile.phone}
-                onChangeText={(text) => handleChange('phone', text)}
-              />
+            <Text style={styles.label}>Số điện thoại</Text>
+            <TextInput
+              style={[styles.input, !isEditing && styles.disabledInput]}
+              editable={isEditing}
+              keyboardType="phone-pad"
+              value={profile.phone}
+              onChangeText={(text) => handleChange('phone', text)}
+            />
 
-              <Text style={styles.label}>Tên đăng nhập</Text>
-              <TextInput
-                style={[styles.input, !isEditing && styles.disabledInput]}
-                editable={isEditing}
-                value={profile.username}
-                onChangeText={(text) => handleChange('username', text)}
-              />
+            <Text style={styles.label}>Tên đăng nhập</Text>
+            <TextInput
+              style={[styles.input, !isEditing && styles.disabledInput]}
+              editable={isEditing}
+              value={profile.username}
+              onChangeText={(text) => handleChange('username', text)}
+            />
 
-              <Text style={styles.label}>Địa chỉ</Text>
-              <TextInput
-                style={[styles.input, !isEditing && styles.disabledInput]}
-                editable={isEditing}
-                value={profile.address}
-                onChangeText={(text) => handleChange('address', text)}
-              />
+            <Text style={styles.label}>Địa chỉ</Text>
+            <TextInput
+              style={[styles.input, !isEditing && styles.disabledInput]}
+              editable={isEditing}
+              value={profile.address}
+              onChangeText={(text) => handleChange('address', text)}
+            />
 
-              <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
-                <Text style={styles.buttonText}>
-                  {isEditing ? 'Lưu thay đổi' : 'Chỉnh sửa thông tin'}
-                </Text>
-              </TouchableOpacity>
+            <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
+              <Text style={styles.buttonText}>
+                {isEditing ? 'Lưu thay đổi' : 'Chỉnh sửa thông tin'}
+              </Text>
+            </TouchableOpacity>
 
-              <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                <Text style={styles.buttonText}>Đăng xuất</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Text style={styles.logoutButtonText}>Đăng xuất</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </LinearGradient>
     </SafeAreaView>
   );
 };
-
-export default ProfileScreen;
 
 const styles = StyleSheet.create({
   container: {
@@ -131,13 +138,18 @@ const styles = StyleSheet.create({
   gradientBackground: {
     flex: 1,
   },
+  headerContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 15,
-    paddingVertical: 2,
-    height: 50,
-    marginTop: StatusBar.currentHeight || 0,
+    paddingVertical: 10,
   },
   backButton: {
     marginRight: 10,
@@ -149,18 +161,10 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    paddingHorizontal: 10,
   },
-  profileCard: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 15,
-    marginVertical: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  scrollViewContent: {
+    paddingHorizontal: 15,
+    paddingBottom: 20,
   },
   userInfo: {
     flexDirection: 'row',
@@ -185,50 +189,50 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#000',
-    marginTop: 10,
+    marginTop: 15,
+    marginBottom: 5,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#e91e63',
+    borderColor: Colors.pink,
     borderRadius: 8,
     padding: 10,
-    marginTop: 5,
     fontSize: 14,
     color: '#000',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
   },
   disabledInput: {
-    backgroundColor: '#f9f9f9',
+    backgroundColor: 'rgba(249, 249, 249, 0.9)',
     color: '#666',
   },
   editButton: {
-    backgroundColor: '#e91e63',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    backgroundColor: Colors.pink,
+    paddingVertical: 10,
+    paddingHorizontal: 15,
     borderRadius: 8,
     marginTop: 20,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
   },
   logoutButton: {
-    backgroundColor: '#ff4d4d',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    backgroundColor: '#fff',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
     borderRadius: 8,
     marginTop: 10,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: Colors.pink,
   },
   buttonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
   },
+  logoutButtonText: {
+    color: Colors.pink,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
 });
+
+export default ProfileScreen;

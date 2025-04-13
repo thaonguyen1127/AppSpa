@@ -13,17 +13,12 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Swiper from 'react-native-swiper';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import BookingHistoryScreen from './booked';
-import FavoriteScreen from './favorite';
-import ProfileScreen from './profile';
-import NotificationScreen from './notification';
+import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 
-
-// Component HomeScreen
 const HomeScreen = () => {
-  // Dữ liệu slider với ảnh mẫu
+  const router = useRouter();
+
   const sliders = [
     { id: '1', image: require('../../assets/images/spa3.jpg'), title: 'Spa thư giãn' },
     { id: '2', image: require('../../assets/images/slider1.jpg'), title: 'Nail nghệ thuật' },
@@ -56,242 +51,177 @@ const HomeScreen = () => {
     console.log('Xem tất cả ưu đãi');
   };
 
-  const HEADER_HEIGHT = Platform.OS === 'android' ? 60 + (StatusBar.currentHeight || 0) : 70;
+  const handleSearchPress = () => {
+    router.push('/user/searchScreen');
+  };
+
+  const HEADER_HEIGHT = 60; // Đồng bộ với Favorite và Search
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar backgroundColor="transparent" translucent barStyle="light-content" />
-      <View style={styles.container}>
-        {/* Header cố định */}
+    <SafeAreaView style={styles.container}>
+      <StatusBar
+        backgroundColor={Colors.pink}
+        barStyle="light-content"
+        translucent={false}
+      />
+      <View style={styles.headerContainer}>
         <View
-          style={[
-            styles.fixedHeader,
-            { height: HEADER_HEIGHT, backgroundColor: Colors.pink },
-          ]}
+          style={[styles.header, { height: HEADER_HEIGHT, backgroundColor: Colors.pink }]}
         >
-          <View style={styles.headerContent}>
-            <View style={styles.searchContainer}>
-              <Icon name="search" size={20} color="#999" style={styles.searchIcon} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Tìm kiếm spa, nail..."
-                placeholderTextColor="#999"
-              />
-            </View>
+          <View style={styles.searchContainer}>
+            <Icon name="search" size={20} color="#999" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Tìm kiếm spa, nail..."
+              placeholderTextColor="#999"
+              onFocus={handleSearchPress}
+            />
+          </View>
+        </View>
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT }]}
+        showsVerticalScrollIndicator={false}
+        contentInsetAdjustmentBehavior="never"
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={[styles.sliderWrapper, { backgroundColor: Colors.pink }]}>
+          <View style={styles.sliderContainer}>
+            <Swiper
+              style={styles.wrapper}
+              showsButtons={false}
+              autoplay
+              loop
+              autoplayTimeout={4} // Sửa lỗi: đổi từ =4 thành ={4}
+              dotStyle={styles.dot}
+              activeDotStyle={styles.activeDot}
+              paginationStyle={styles.pagination}
+              removeClippedSubviews={true}
+            >
+              {sliders.map((slide) => (
+                <View key={slide.id} style={styles.slide}>
+                  <Image source={slide.image} style={styles.slideImage} resizeMode="cover" />
+                  <View style={styles.slideOverlay}>
+                    <Text style={styles.slideText}>{slide.title}</Text>
+                  </View>
+                </View>
+              ))}
+            </Swiper>
           </View>
         </View>
 
-        {/* ScrollView chứa slider và nội dung */}
-        <ScrollView
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT }]}
-          contentInsetAdjustmentBehavior="never"
-        >
-          {/* Slider với nền hồng */}
-          <View style={[styles.sliderWrapper, { backgroundColor: Colors.pink }]}>
-            <View style={styles.sliderContainer}>
-              <Swiper
-                style={styles.wrapper}
-                showsButtons={false}
-                autoplay
-                loop
-                autoplayTimeout={4}
-                dotStyle={styles.dot}
-                activeDotStyle={styles.activeDot}
-                paginationStyle={styles.pagination}
-                removeClippedSubviews={true}
-              >
-                {sliders.map((slide) => (
-                  <View key={slide.id} style={styles.slide}>
-                    <Image
-                      source={slide.image}
-                      style={styles.slideImage}
-                      resizeMode="cover"
-                    />
-                    <View style={styles.slideOverlay}>
-                      <Text style={styles.slideText}>{slide.title}</Text>
-                    </View>
-                  </View>
-                ))}
-              </Swiper>
-            </View>
+        <View style={styles.whiteContent}>
+          <View style={styles.categoryContainer}>
+            <Text style={styles.sectionTitle}>Danh mục</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {categories.map((category, index) => (
+                <TouchableOpacity key={index} style={styles.categoryButton}>
+                  <Text style={styles.categoryText}>{category}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
 
-          {/* Nội dung trắng */}
-          <View style={styles.whiteContent}>
-            <View style={styles.categoryContainer}>
-              <Text style={styles.sectionTitle}>Danh mục</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {categories.map((category, index) => (
-                  <TouchableOpacity key={index} style={styles.categoryButton}>
-                    <Text style={styles.categoryText}>{category}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Spa được đánh giá cao</Text>
+              <TouchableOpacity onPress={handleViewAllTopRated}>
+                <Text style={styles.viewAllText}>Xem tất cả</Text>
+              </TouchableOpacity>
             </View>
-
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Spa được đánh giá cao</Text>
-                <TouchableOpacity onPress={handleViewAllTopRated}>
-                  <Text style={styles.viewAllText}>Xem tất cả</Text>
+            <FlatList
+              data={topRatedSpas}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={styles.itemCard}>
+                  <View style={styles.itemImagePlaceholder} />
+                  <Text style={styles.itemText} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.itemSubText}>⭐ {item.rating}</Text>
                 </TouchableOpacity>
-              </View>
-              <FlatList
-                data={topRatedSpas}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                renderItem={({ item }) => (
-                  <TouchableOpacity style={styles.itemCard}>
-                    <View style={styles.itemImagePlaceholder} />
-                    <Text style={styles.itemText} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    <Text style={styles.itemSubText}>⭐ {item.rating}</Text>
-                  </TouchableOpacity>
-                )}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={{ paddingRight: 15 }}
-              />
-            </View>
-
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Spa gần bạn</Text>
-                <TouchableOpacity onPress={handleViewAllNearby}>
-                  <Text style={styles.viewAllText}>Xem tất cả</Text>
-                </TouchableOpacity>
-              </View>
-              <FlatList
-                data={nearbySpas}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                renderItem={({ item }) => (
-                  <TouchableOpacity style={styles.itemCard}>
-                    <View style={styles.itemImagePlaceholder} />
-                    <Text style={styles.itemText} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    <Text style={styles.itemSubText}>📍 {item.distance}</Text>
-                  </TouchableOpacity>
-                )}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={{ paddingRight: 15 }}
-              />
-            </View>
-
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Ưu đãi</Text>
-                <TouchableOpacity onPress={handleViewAllPromotions}>
-                  <Text style={styles.viewAllText}>Xem tất cả</Text>
-                </TouchableOpacity>
-              </View>
-              <FlatList
-                data={promotions}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                renderItem={({ item }) => (
-                  <TouchableOpacity style={styles.itemCardPromotion}>
-                    <View style={styles.promotionImagePlaceholder} />
-                    <Text style={styles.itemText} numberOfLines={2}>
-                      {item.title}
-                    </Text>
-                    <Text style={styles.discountText}>Giảm {item.discount}</Text>
-                  </TouchableOpacity>
-                )}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={{ paddingRight: 15 }}
-              />
-            </View>
-            <View style={{ height: 20 }} />
+              )}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ paddingRight: 15 }}
+            />
           </View>
-        </ScrollView>
-      </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Spa gần bạn</Text>
+              <TouchableOpacity onPress={handleViewAllNearby}>
+                <Text style={styles.viewAllText}>Xem tất cả</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={nearbySpas}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={styles.itemCard}>
+                  <View style={styles.itemImagePlaceholder} />
+                  <Text style={styles.itemText} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.itemSubText}>📍 {item.distance}</Text>
+                </TouchableOpacity>
+              )}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ paddingRight: 15 }}
+            />
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Ưu đãi</Text>
+              <TouchableOpacity onPress={handleViewAllPromotions}>
+                <Text style={styles.viewAllText}>Xem tất cả</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={promotions}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={styles.itemCardPromotion}>
+                  <View style={styles.promotionImagePlaceholder} />
+                  <Text style={styles.itemText} numberOfLines={2}>
+                    {item.title}
+                  </Text>
+                  <Text style={styles.discountText}>Giảm {item.discount}</Text>
+                </TouchableOpacity>
+              )}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ paddingRight: 15 }}
+            />
+          </View>
+          <View style={{ height: 100 }} />
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
 
-// Tab Navigator
-const Tab = createBottomTabNavigator();
-
-const UserScreen = () => {
-  return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
-          if (route.name === 'Home')
-            iconName = focused ? 'home' : 'home-outline';
-          else if (route.name === 'Booked')
-            iconName = focused ? 'calendar' : 'calendar-outline';
-          else if (route.name === 'Yêu thích')
-            iconName = focused ? 'heart' : 'heart-outline';
-          else if (route.name === 'Thông báo')
-            iconName = focused ? 'notifications' : 'notifications-outline';
-          else if (route.name === 'Tôi')
-            iconName = focused ? 'person' : 'person-outline';
-          else iconName = 'ellipse-outline';
-
-          return <Icon name={iconName} size={size} color={color} />;
-        },
-        headerShown: false,
-        tabBarActiveTintColor: Colors.pink,
-        tabBarInactiveTintColor: '#888',
-        tabBarLabelStyle: {
-          fontWeight: '500',
-          fontSize: 11,
-          marginBottom: 5,
-        },
-        tabBarStyle: {
-          backgroundColor: '#fff',
-          borderTopWidth: 0.5,
-          borderTopColor: '#eee',
-          height: 65,
-          paddingTop: 5,
-          paddingBottom: Platform.OS === 'ios' ? 15 : 5,
-        },
-      })}
-    >
-      <Tab.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{ title: 'Trang chủ' }}
-      />
-      <Tab.Screen
-        name="Booked"
-        component={BookingHistoryScreen}
-        options={{ title: 'Lịch hẹn' }}
-      />
-      <Tab.Screen name="Yêu thích" component={FavoriteScreen} />
-      <Tab.Screen name="Thông báo" component={NotificationScreen} />
-      <Tab.Screen name="Tôi" component={ProfileScreen} />
-    </Tab.Navigator>
-  );
-};
-
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
   container: {
     flex: 1,
-    backgroundColor: Colors.pink, // Đồng bộ với header và slider
+    backgroundColor: Colors.pink, // Đồng bộ với StatusBar và header
   },
-  fixedHeader: {
+  headerContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     zIndex: 10,
   },
-  headerContent: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 15,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 5 : 10,
-    paddingBottom: 10,
+    paddingVertical: 10,
   },
   searchContainer: {
     flex: 1,
@@ -300,7 +230,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 15,
     backgroundColor: '#fff',
-    height: 45,
+    height: 45, // Chiều cao cố định
   },
   searchIcon: {
     marginRight: 8,
@@ -313,7 +243,7 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: '#fff', // Nội dung chính màu trắng
   },
   scrollViewContent: {
     paddingBottom: 20,
@@ -322,12 +252,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.pink,
   },
   sliderContainer: {
-    height: 190,
+    height: 200,
     marginTop: 0,
-    // marginBottom: 10,
-    // paddingHorizontal: 15,
     width: '100%',
-    
   },
   wrapper: {},
   slide: {
@@ -345,7 +272,7 @@ const styles = StyleSheet.create({
   slideOverlay: {
     position: 'absolute',
     bottom: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)', // Nền mờ cho chữ
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     paddingHorizontal: 15,
     paddingVertical: 5,
     borderRadius: 5,
@@ -377,6 +304,7 @@ const styles = StyleSheet.create({
   },
   whiteContent: {
     backgroundColor: '#fff',
+    flexGrow: 1,
   },
   categoryContainer: {
     paddingHorizontal: 15,
@@ -466,12 +394,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     marginTop: 5,
   },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-  },
 });
 
-export default UserScreen;
+export default HomeScreen;

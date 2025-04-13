@@ -50,25 +50,34 @@ const FavoriteScreen = () => {
     navigation.navigate('screen/spaDetail', { spa });
   };
 
+  const HEADER_HEIGHT = 60; // Chiều cao cố định cho header, đồng bộ với Home và Search
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar
-        backgroundColor="transparent"
-        translucent
+        backgroundColor={Colors.pink}
         barStyle="light-content"
+        translucent={false}
       />
       <LinearGradient
         colors={[Colors.pink, `${Colors.pink}80`, '#fff']}
         style={styles.gradientBackground}
       >
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <Icon name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Spa yêu thích</Text>
+        <View style={styles.headerContainer}>
+          <View
+            style={[styles.header, { height: HEADER_HEIGHT }]}
+          >
+            <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+              <Icon name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Spa yêu thích</Text>
+          </View>
         </View>
 
-        <ScrollView style={styles.scrollView}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT }]}
+        >
           {favoriteSpas.length === 0 ? (
             <Text style={styles.emptyText}>Chưa có spa yêu thích nào</Text>
           ) : (
@@ -114,13 +123,18 @@ const styles = StyleSheet.create({
   gradientBackground: {
     flex: 1,
   },
+  headerContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 15,
-    paddingVertical: 2,
-    height: 50,
-    marginTop: StatusBar.currentHeight || 0,
+    paddingVertical: 10,
   },
   backButton: {
     marginRight: 10,
@@ -132,7 +146,10 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollViewContent: {
     paddingHorizontal: 10,
+    paddingBottom: 20,
   },
   spaCard: {
     backgroundColor: '#fff',

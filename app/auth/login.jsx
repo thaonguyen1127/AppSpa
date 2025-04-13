@@ -26,7 +26,7 @@ import { signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
 
 // Cấu hình Google Sign-In
 // GoogleSignin.configure({
-//   webClientId: '', // Thay bằng webClientId từ Google Cloud Console
+//   webClientId: '972461785953-alpsf6rq1q50p64qj0lfssl0f4tkphsv.apps.googleusercontent.com', // Thay bằng webClientId từ Google Cloud Console
 //   offlineAccess: true,
 // });
 

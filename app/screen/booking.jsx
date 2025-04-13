@@ -27,6 +27,7 @@ const BookingScreen = () => {
   const [modalMessage, setModalMessage] = useState('');
   const [isSuccess, setIsSuccess] = useState(true);
   const navigation = useNavigation();
+  const HEADER_HEIGHT = 60; // Đồng bộ với Favorite, Notification, BookingHistory, Profile
 
   const timeSlots = [];
   for (let hour = 8; hour <= 20; hour++) {
@@ -109,19 +110,30 @@ const BookingScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar backgroundColor="transparent" translucent barStyle="light-content" />
+      <StatusBar
+        backgroundColor={Colors.pink}
+        barStyle="light-content"
+        translucent={false}
+      />
       <LinearGradient
-        colors={[Colors.pink, `${Colors.pink}cc`, '#fff']} // Mượt hơn với độ mờ nhẹ
+        colors={[Colors.pink, `${Colors.pink}80`, '#fff']}
         style={styles.gradientBackground}
       >
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <Icon name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Đặt lịch</Text>
+        <View style={styles.headerContainer}>
+          <View
+            style={[styles.header, { height: HEADER_HEIGHT }]}
+          >
+            <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+              <Icon name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Đặt lịch</Text>
+          </View>
         </View>
 
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: HEADER_HEIGHT }]}
+        >
           <View style={styles.calendarBlock}>
             <Calendar
               current={today}
@@ -233,14 +245,18 @@ const styles = StyleSheet.create({
   gradientBackground: {
     flex: 1,
   },
+  headerContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 15,
     paddingVertical: 10,
-    minHeight: 50,
-    marginTop: StatusBar.currentHeight || 0,
-    backgroundColor: Colors.pink, // Khớp với LinearGradient
   },
   backButton: {
     marginRight: 10,
@@ -254,21 +270,30 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingTop: 0, // Bắt đầu ngay dưới header
+    paddingHorizontal: 10,
+    paddingBottom: 20,
   },
   calendarBlock: {
-    backgroundColor: '#fff', // Giữ trắng để nổi bật nhưng hòa vào gradient
-    marginHorizontal: 10,
-    marginVertical: 5, // Giảm margin để liền mạch
-    borderRadius: 10, 
-    padding: 15, 
+    backgroundColor: '#fff',
+    marginVertical: 5,
+    borderRadius: 10,
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   timeBlock: {
-    backgroundColor: '#fff', 
-    marginHorizontal: 10,
-    marginVertical: 5, 
-    borderRadius: 10, 
+    backgroundColor: '#fff',
+    marginVertical: 5,
+    borderRadius: 10,
     padding: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   sectionTitle: {
     fontSize: 18,
@@ -282,7 +307,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   timeSlot: {
-    backgroundColor: '#f9f9f9', // Nhẹ hơn để hòa vào nền
+    backgroundColor: '#f9f9f9',
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderRadius: 8,
@@ -310,8 +335,7 @@ const styles = StyleSheet.create({
   confirmButton: {
     backgroundColor: Colors.pink,
     paddingVertical: 15,
-    marginHorizontal: 10,
-    marginVertical: 10, // Giảm margin
+    marginVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
   },
@@ -350,8 +374,6 @@ const styles = StyleSheet.create({
     color: '#333',
     textAlign: 'center',
     marginBottom: 20,
-    flexWrap: 'nowrap',
-    width: '100%',
   },
   modalButton: {
     paddingVertical: 10,
