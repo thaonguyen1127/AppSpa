@@ -27,7 +27,7 @@ const ProfileScreen = () => {
     address: '123 Đường Hoa Hồng, Quận 1, TP.HCM',
     avatar: 'https://i.pravatar.cc/150?img=3',
   });
-  const HEADER_HEIGHT = 60; // Đồng bộ với Favorite, Notification, BookingHistory, Booking
+  const HEADER_HEIGHT = 50; // Đồng bộ với Favorite, Notification, BookingHistory, Booking
 
   const handleEdit = () => setIsEditing(!isEditing);
   const handleChange = (field, value) => {
@@ -40,7 +40,7 @@ const ProfileScreen = () => {
       {
         text: 'Đăng xuất',
         onPress: () => {
-          router.replace('/login');
+          router.replace('auth/login');
         },
       },
     ]);
@@ -54,7 +54,7 @@ const ProfileScreen = () => {
         translucent={false}
       />
       <LinearGradient
-        colors={[Colors.pink, `${Colors.pink}80`, '#fff']}
+        colors={[Colors.pink, `${Colors.pink}`, '#fff']}
         style={styles.gradientBackground}
       >
         <View style={styles.headerContainer}>
@@ -144,6 +144,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+    backgroundColor: Colors.pink
   },
   header: {
     flexDirection: 'row',

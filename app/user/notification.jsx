@@ -32,11 +32,30 @@ const notifications = [
     message: 'Ứng dụng sẽ bảo trì từ 00:00 đến 02:00 ngày 17/04.',
     time: '2 ngày trước',
   },
+  {
+    id: '4',
+    title: 'Thông báo hệ thống',
+    message: 'Ứng dụng sẽ bảo trì từ 00:00 đến 02:00 ngày 17/04.',
+    time: '2 ngày trước',
+  },
+  {
+    id: '5',
+    title: 'Thông báo hệ thống',
+    message: 'Ứng dụng sẽ bảo trì từ 00:00 đến 02:00 ngày 17/04.',
+    time: '2 ngày trước',
+  },
+  {
+    id: '6',
+    title: 'Thông báo hệ thống',
+    message: 'Ứng dụng sẽ bảo trì từ 00:00 đến 02:00 ngày 17/04.',
+    time: '2 ngày trước',
+  },
+  
 ];
 
 const NotificationScreen = () => {
   const router = useRouter();
-  const HEADER_HEIGHT = 60; // Đồng bộ với Favorite, Home, Search
+  const HEADER_HEIGHT = 50; // Đồng bộ với Favorite, Home, Search
 
   const renderItem = ({ item }) => (
     <View style={styles.notificationItem}>
@@ -62,7 +81,7 @@ const NotificationScreen = () => {
         translucent={false}
       />
       <LinearGradient
-        colors={[Colors.pink, `${Colors.pink}80`, '#fff']}
+        colors={[Colors.pink, `${Colors.pink}`, '#fff']}
         style={styles.gradientBackground}
       >
         <View style={styles.headerContainer}>
@@ -103,6 +122,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+    backgroundColor: Colors.pink
   },
   header: {
     flexDirection: 'row',

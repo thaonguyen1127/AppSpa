@@ -73,8 +73,8 @@ export default function RootLayout() {
         options={{ headerShown: true, title: 'Admin Dashboard' }}
       />
       <Stack.Screen
-        name="owner/booking"
-        options={{ headerShown: true, title: 'Owner Dashboard' }}
+        name="owner"
+        // options={{ headerShown: true, title: 'Owner Dashboard' }}
       />
       <Stack.Screen name="user" />
       <Stack.Screen name="(tabs)" />

@@ -1,112 +1,101 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   StatusBar,
   SafeAreaView,
-  Modal,
+  TouchableOpacity,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Calendar } from 'react-native-calendars';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors } from '@/constants/Colors';
 import { useNavigation } from '@react-navigation/native';
 
-const BookingScreen = () => {
-  const [bookedSlots, setBookedSlots] = useState([
-    { date: '2025-04-11', time: '09:00' },
-    { date: '2025-04-11', time: '10:30' },
-  ]);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedTime, setSelectedTime] = useState('');
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [modalVisible, setModalVisible] = useState(false);
-  const [modalMessage, setModalMessage] = useState('');
-  const [isSuccess, setIsSuccess] = useState(true);
+// Dữ liệu mẫu
+const bookedSpas = [
+  {
+    id: '1',
+    spaName: 'Lavender Spa',
+    date: '2025-04-11',
+    time: '09:30',
+    service: 'Massage thư giãn',
+    avatar: 'https://images.pexels.com/photos/3757952/pexels-photo-3757952.jpeg?auto=compress&cs=tinysrgb&w=50&h=50',
+  },
+  {
+    id: '2',
+    spaName: 'Rose Spa',
+    date: '2025-04-10',
+    time: '14:00',
+    service: 'Chăm sóc da mặt',
+    avatar: 'https://images.pexels.com/photos/3757957/pexels-photo-3757957.jpeg?auto=compress&cs=tinysrgb&w=50&h=50',
+  },
+  {
+    id: '3',
+    spaName: 'Jasmine Spa',
+    date: '2025-03-25',
+    time: '10:30',
+    service: 'Gội đầu dưỡng sinh',
+    avatar: 'https://images.pexels.com/photos/3757954/pexels-photo-3757954.jpeg?auto=compress&cs=tinysrgb&w=50&h=50',
+  },
+  {
+    id: '4',
+    spaName: 'Orchid Spa',
+    date: '2025-03-15',
+    time: '16:00',
+    service: 'Massage toàn thân',
+    avatar: 'https://images.pexels.com/photos/3757952/pexels-photo-3757952.jpeg?auto=compress&cs=tinysrgb&w=50&h=50',
+  },
+  {
+    id: '5',
+    spaName: 'Lotus Spa',
+    date: '2025-02-28',
+    time: '11:00',
+    service: 'Chăm sóc móng',
+    avatar: 'https://images.pexels.com/photos/3757954/pexels-photo-3757954.jpeg?auto=compress&cs=tinysrgb&w=50&h=50',
+  },
+];
+
+const BookingHistoryScreen = () => {
   const navigation = useNavigation();
+  const HEADER_HEIGHT = 50; 
 
-  const HEADER_HEIGHT = 60;
+  const groupByMonth = (bookings) => {
+    const grouped = bookings.reduce((acc, booking) => {
+      const date = new Date(booking.date);
+      const monthYear = `${date.getFullYear()}-${date.getMonth() + 1}`;
+      if (!acc[monthYear]) {
+        acc[monthYear] = {
+          month: `Tháng ${date.getMonth() + 1}, ${date.getFullYear()}`,
+          bookings: [],
+        };
+      }
+      acc[monthYear].bookings.push(booking);
+      return acc;
+    }, {});
 
-  const timeSlots = [];
-  for (let hour = 8; hour <= 20; hour++) {
-    if (hour === 8) {
-      timeSlots.push('08:30');
-    } else {
-      timeSlots.push(`${hour < 10 ? '0' + hour : hour}:00`);
-      if (hour < 20) timeSlots.push(`${hour < 10 ? '0' + hour : hour}:30`);
-    }
-  }
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const today = currentTime.toISOString().split('T')[0];
-
-  const handleDayPress = (day) => {
-    setSelectedDate(day.dateString);
-    setSelectedTime('');
+    return Object.values(grouped).sort((a, b) => {
+      const dateA = new Date(a.bookings[0].date);
+      const dateB = new Date(b.bookings[0].date);
+      return dateB - dateA;
+    });
   };
 
-  const handleTimePress = (time) => {
-    setSelectedTime(time);
-  };
+  const groupedBookings = groupByMonth(bookedSpas);
 
   const formatDate = (dateString) => {
     const [year, month, day] = dateString.split('-');
     return `${day}/${month}/${year}`;
   };
 
-  const handleBookingConfirm = () => {
-    if (selectedDate && selectedTime) {
-      setModalMessage(`Đặt lịch lúc ${selectedTime} ngày ${formatDate(selectedDate)}`);
-      setIsSuccess(true);
-      setModalVisible(true);
-      setBookedSlots([...bookedSlots, { date: selectedDate, time: selectedTime }]);
-      setSelectedTime('');
-    } else {
-      setModalMessage('Vui lòng chọn ngày và giờ');
-      setIsSuccess(false);
-      setModalVisible(true);
-    }
-  };
-
-  const isTimeDisabled = (time) => {
-    const [hour, minute] = time.split(':').map(Number);
-    const selectedDateObj = new Date(selectedDate);
-    const todayDate = new Date(today);
-    const nowPlusOneHour = new Date(currentTime.getTime() + 60 * 60 * 1000);
-
-    if (selectedDateObj < todayDate.setHours(0, 0, 0, 0)) return true;
-
-    if (selectedDate === today) {
-      const currentHourPlusOne = nowPlusOneHour.getHours();
-      const currentMinutePlusOne = nowPlusOneHour.getMinutes();
-      if (
-        hour < currentHourPlusOne ||
-        (hour === currentHourPlusOne && minute <= currentMinutePlusOne)
-      ) {
-        return true;
-      }
-    }
-
-    return bookedSlots.some(
-      (slot) => slot.date === selectedDate && slot.time === time
-    );
-  };
-
   const handleBack = () => {
     navigation.goBack();
   };
 
-  const closeModal = () => {
-    setModalVisible(false);
+  const goToSpaDetail = (spa) => {
+    navigation.navigate('screen/spaDetail', { spa });
   };
 
   return (
@@ -117,122 +106,61 @@ const BookingScreen = () => {
         translucent={false}
       />
       <LinearGradient
-        colors={[Colors.pink, `${Colors.pink}80`, '#fff']}
+        colors={[Colors.pink, `${Colors.pink}`, '#fff']}
         style={styles.gradientBackground}
       >
-        {/* Fixed Header */}
         <View style={styles.headerContainer}>
-          <View style={[styles.header, { height: HEADER_HEIGHT }]}>
+          <View
+            style={[styles.header, { height: HEADER_HEIGHT }]}
+          >
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
               <Icon name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Lịch sử đã đặt</Text>
+            <Text style={styles.headerTitle}>Lịch sử đặt lịch</Text>
           </View>
         </View>
 
-        {/* Scrollable Content */}
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={{ paddingTop: HEADER_HEIGHT + 10, paddingHorizontal: 10, paddingBottom: 20 }}
+          contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT }]}
         >
-          <View style={styles.calendarBlock}>
-            <Calendar
-              current={today}
-              onDayPress={handleDayPress}
-              markedDates={{
-                [selectedDate]: { selected: true, selectedColor: Colors.pink },
-                [today]: {
-                  marked: true,
-                  dotColor: Colors.pink,
-                  selected: selectedDate === today,
-                  selectedColor: Colors.pink,
-                },
-              }}
-              theme={{
-                calendarBackground: '#fff',
-                selectedDayBackgroundColor: Colors.pink,
-                selectedDayTextColor: '#fff',
-                todayTextColor: Colors.pink,
-                dayTextColor: '#000',
-                textDisabledColor: '#d9e1e8',
-                monthTextColor: '#000',
-                textMonthFontWeight: 'bold',
-              }}
-            />
-          </View>
-
-          <View style={styles.timeBlock}>
-            <Text style={styles.sectionTitle}>Chọn khung giờ</Text>
-            <View style={styles.timeGrid}>
-              {timeSlots.map((time) => {
-                const disabled = isTimeDisabled(time);
-                return (
+          {groupedBookings.length === 0 ? (
+            <Text style={styles.emptyText}>Chưa có lịch đặt nào</Text>
+          ) : (
+            groupedBookings.map((group, index) => (
+              <View key={index} style={styles.monthBlock}>
+                <Text style={styles.monthTitle}>{group.month}</Text>
+                {group.bookings.map((booking) => (
                   <TouchableOpacity
-                    key={time}
-                    style={[
-                      styles.timeSlot,
-                      selectedTime === time && !disabled && styles.selectedTimeSlot,
-                      disabled && styles.disabledTimeSlot,
-                    ]}
-                    onPress={() => !disabled && handleTimePress(time)}
-                    disabled={disabled}
+                    key={booking.id}
+                    style={styles.bookingCard}
+                    onPress={() => goToSpaDetail(booking)}
                   >
-                    <Text
-                      style={[
-                        styles.timeText,
-                        selectedTime === time && !disabled && styles.selectedTimeText,
-                        disabled && styles.disabledTimeText,
-                      ]}
+                    <Image
+                      source={{ uri: booking.avatar }}
+                      style={styles.spaAvatar}
+                      defaultSource={{ uri: 'https://via.placeholder.com/50/CCCCCC/FFFFFF?text=Spa' }}
+                      onError={() => console.log(`Failed to load image for ${booking.spaName}`)}
+                    />
+                    <View style={styles.bookingInfo}>
+                      <Text style={styles.spaName}>{booking.spaName}</Text>
+                      <Text style={styles.serviceText}>{booking.service}</Text>
+                      <Text style={styles.dateTimeText}>
+                        {formatDate(booking.date)} lúc {booking.time}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.viewButton}
+                      onPress={() => goToSpaDetail(booking)}
                     >
-                      {time}
-                    </Text>
+                      <Text style={styles.viewButtonText}>Chi tiết</Text>
+                    </TouchableOpacity>
                   </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[
-              styles.confirmButton,
-              (!selectedTime || isTimeDisabled(selectedTime)) && styles.disabledButton,
-            ]}
-            onPress={handleBookingConfirm}
-            disabled={!selectedTime || isTimeDisabled(selectedTime)}
-          >
-            <Text style={styles.confirmButtonText}>Xác nhận đặt lịch</Text>
-          </TouchableOpacity>
+                ))}
+              </View>
+            ))
+          )}
         </ScrollView>
-
-        {/* Modal */}
-        <Modal
-          animationType="fade"
-          transparent={true}
-          visible={modalVisible}
-          onRequestClose={closeModal}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContainer}>
-              <Icon
-                name={isSuccess ? 'checkmark-circle' : 'warning'}
-                size={40}
-                color={isSuccess ? Colors.successGreen : Colors.errorRed}
-                style={styles.modalIcon}
-              />
-              <Text style={styles.modalTitle}>{isSuccess ? 'Thành công' : 'Lỗi'}</Text>
-              <Text style={styles.modalMessage}>{modalMessage}</Text>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  { backgroundColor: isSuccess ? Colors.pink : Colors.gray },
-                ]}
-                onPress={closeModal}
-              >
-                <Text style={styles.modalButtonText}>Đóng</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
       </LinearGradient>
     </SafeAreaView>
   );
@@ -251,19 +179,19 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    // backgroundColor: Colors.pink,
-    backgroundColor: 'transparent',
+    backgroundColor: Colors.pink,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 15,
-    paddingTop: 10,
+    paddingVertical: 10,
   },
   backButton: {
     marginRight: 10,
   },
   headerTitle: {
+    // lineHeight: 20,
     fontSize: 20,
     fontWeight: 'bold',
     color: '#fff',
@@ -271,118 +199,74 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  calendarBlock: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 15,
-    marginVertical: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  scrollViewContent: {
+    paddingHorizontal: 10,
+    paddingBottom: 20,
   },
-  timeBlock: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 15,
-    marginVertical: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  monthBlock: {
+    marginVertical: 10,
   },
-  sectionTitle: {
+  monthTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 10,
     color: '#000',
+    marginBottom: 10,
+    textTransform: 'capitalize',
   },
-  timeGrid: {
+  bookingCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 15,
+    marginVertical: 5,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  timeSlot: {
-    backgroundColor: '#f9f9f9',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 8,
-    marginBottom: 10,
-    width: '30%',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  selectedTimeSlot: {
-    backgroundColor: Colors.pink,
+  spaAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 10,
   },
-  disabledTimeSlot: {
-    backgroundColor: '#e0e0e0',
-  },
-  timeText: {
-    fontSize: 16,
-    color: '#000',
-  },
-  selectedTimeText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  disabledTimeText: {
-    color: '#999',
-  },
-  confirmButton: {
-    backgroundColor: Colors.pink,
-    paddingVertical: 15,
-    marginTop: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  confirmButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  disabledButton: {
-    backgroundColor: '#ccc',
-  },
-  modalOverlay: {
+  bookingInfo: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  modalContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 20,
-    width: '80%',
-    alignItems: 'center',
-  },
-  modalIcon: {
-    marginBottom: 10,
-  },
-  modalTitle: {
-    fontSize: 20,
+  spaName: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#000',
-    marginBottom: 10,
   },
-  modalMessage: {
-    fontSize: 16,
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 20,
+  serviceText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
   },
-  modalButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+  dateTimeText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  viewButton: {
+    backgroundColor: Colors.pink,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 8,
   },
-  modalButtonText: {
+  viewButtonText: {
     color: '#fff',
+    fontSize: 14,
     fontWeight: 'bold',
+  },
+  emptyText: {
     fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 20,
   },
 });
 
-export default BookingScreen;
+export default BookingHistoryScreen;

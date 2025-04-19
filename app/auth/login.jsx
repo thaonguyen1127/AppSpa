@@ -97,7 +97,7 @@ const LoginScreen = () => {
           router.replace('/admin/dashboard');
           break;
         case 'owner':
-          router.replace('/owner/spaDetail');
+          router.replace('/owner/dashboard');
           break;
         case 'user':
           router.replace('/user/home');
@@ -169,7 +169,7 @@ const LoginScreen = () => {
           router.replace('/admin/dashboard');
           break;
         case 'owner':
-          router.replace('/owner/spaDetail');
+          router.replace('/owner/dashboard');
           break;
         case 'user':
           router.replace('/user/home');

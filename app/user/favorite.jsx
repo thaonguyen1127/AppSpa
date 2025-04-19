@@ -37,6 +37,27 @@ const favoriteSpas = [
     rating: 4.7,
     avatar: 'https://images.pexels.com/photos/3757954/pexels-photo-3757954.jpeg?auto=compress&cs=tinysrgb&w=50&h=50',
   },
+   {
+    id: '4',
+    name: 'Jasmine Spa',
+    service: 'Gội đầu dưỡng sinh',
+    rating: 4.7,
+    avatar: 'https://images.pexels.com/photos/3757954/pexels-photo-3757954.jpeg?auto=compress&cs=tinysrgb&w=50&h=50',
+  },
+  {
+    id: '5',
+    name: 'Jasmine Spa',
+    service: 'Gội đầu dưỡng sinh',
+    rating: 4.7,
+    avatar: 'https://images.pexels.com/photos/3757954/pexels-photo-3757954.jpeg?auto=compress&cs=tinysrgb&w=50&h=50',
+  },
+  {
+    id: '6',
+    name: 'Jasmine Spa',
+    service: 'Gội đầu dưỡng sinh',
+    rating: 4.7,
+    avatar: 'https://images.pexels.com/photos/3757954/pexels-photo-3757954.jpeg?auto=compress&cs=tinysrgb&w=50&h=50',
+  },
 ];
 
 const FavoriteScreen = () => {
@@ -50,7 +71,7 @@ const FavoriteScreen = () => {
     navigation.navigate('screen/spaDetail', { spa });
   };
 
-  const HEADER_HEIGHT = 60; // Chiều cao cố định cho header, đồng bộ với Home và Search
+  const HEADER_HEIGHT = 50; 
 
   return (
     <SafeAreaView style={styles.container}>
@@ -60,7 +81,7 @@ const FavoriteScreen = () => {
         translucent={false}
       />
       <LinearGradient
-        colors={[Colors.pink, `${Colors.pink}80`, '#fff']}
+        colors={[Colors.pink, `${Colors.pink}`, '#fff']}
         style={styles.gradientBackground}
       >
         <View style={styles.headerContainer}>
@@ -128,7 +149,9 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 10,
+    zIndex: 100,
+    backgroundColor: `${Colors.pink}`
+
   },
   header: {
     flexDirection: 'row',

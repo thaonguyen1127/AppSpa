@@ -27,7 +27,7 @@ const BookingScreen = () => {
   const [modalMessage, setModalMessage] = useState('');
   const [isSuccess, setIsSuccess] = useState(true);
   const navigation = useNavigation();
-  const HEADER_HEIGHT = 60; // Đồng bộ với Favorite, Notification, BookingHistory, Profile
+  const HEADER_HEIGHT = 50; // Đồng bộ với Favorite, Notification, BookingHistory, Profile
 
   const timeSlots = [];
   for (let hour = 8; hour <= 20; hour++) {
@@ -116,7 +116,7 @@ const BookingScreen = () => {
         translucent={false}
       />
       <LinearGradient
-        colors={[Colors.pink, `${Colors.pink}80`, '#fff']}
+        colors={[Colors.pink, `${Colors.pink}`, '#fff']}
         style={styles.gradientBackground}
       >
         <View style={styles.headerContainer}>
@@ -251,6 +251,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+    backgroundColor: Colors.pink
   },
   header: {
     flexDirection: 'row',

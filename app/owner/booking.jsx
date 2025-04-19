@@ -111,14 +111,16 @@ const BookingScreen = () => {
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor={Colors.pink} barStyle="light-content" />
       <LinearGradient
-        colors={[Colors.pink, `${Colors.pink}80`, '#fff']}
+        colors={[Colors.pink, `${Colors.pink}`, '#fff']}
         style={styles.gradientBackground}
       >
+       <View style={styles.headerContainer}>
         <View style={styles.header}>
           <TouchableOpacity onPress={handleBack} style={styles.backButton}>
             <Icon name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Đặt lịch</Text>
+          <Text style={styles.headerTitle}>Đặt lịch t</Text>
+        </View>
         </View>
 
         <ScrollView style={styles.scrollView}>
@@ -234,12 +236,19 @@ const styles = StyleSheet.create({
   gradientBackground: {
     flex: 1,
   },
+  headerContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: Colors.pink,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 15,
-    paddingVertical: 2,
-    height: 50,
+    paddingVertical: 10,
   },
   backButton: {
     marginRight: 10,

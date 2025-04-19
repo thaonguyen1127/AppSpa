@@ -13,11 +13,11 @@
       "bundleIdentifier": "com.spa"
     },
     "android": {
+      "package": "com.spa",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      },
-      "package": "com.spa"
+      }
     },
     "web": {
       "bundler": "metro",

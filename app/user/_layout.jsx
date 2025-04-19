@@ -57,7 +57,9 @@ export default function UserLayout() {
         name="profile"
         options={{
           title: 'Hồ sơ',
-          tabBarIcon: ({ color }) => <Icon name="person" size={28} color={color} />,
+          tabBarIcon: ({ color }) => <Icon name="notifications" size={28} color={color} />
+          // href: null,
+          // tabBarStyle: { display: 'none' },
         }}
       />
       <Tabs.Screen

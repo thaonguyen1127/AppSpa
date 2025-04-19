@@ -55,7 +55,7 @@ const HomeScreen = () => {
     router.push('/user/searchScreen');
   };
 
-  const HEADER_HEIGHT = 60; // Đồng bộ với Favorite và Search
+  const HEADER_HEIGHT = 50; 
 
   return (
     <SafeAreaView style={styles.container}>
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 15,
     backgroundColor: '#fff',
-    height: 45, // Chiều cao cố định
+    height: 40, // Chiều cao cố định
   },
   searchIcon: {
     marginRight: 8,

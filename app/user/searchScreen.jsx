@@ -108,7 +108,7 @@ export default function SearchScreen() {
     </View>
   ), []);
 
-  const HEADER_HEIGHT = 60; // Đồng bộ với Favorite và Home
+  const HEADER_HEIGHT = 50; 
 
   return (
     <SafeAreaView style={styles.container}>
@@ -272,6 +272,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
+    marginTop: 10,
   },
   sectionTitle: {
     fontSize: 18,
