@@ -16,6 +16,8 @@ import { db } from '../../src/firebaseConfig';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
+const HEADER_HEIGHT = 50;
+
 export default function SpaDetailScreen() {
     const router = useRouter();
     const { spaId } = useLocalSearchParams();
@@ -123,7 +125,7 @@ export default function SpaDetailScreen() {
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={28} color="#fff" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>{spaData.name}</Text>
+                <Text style={styles.headerTitle}>Thông tin Spa</Text>
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -185,18 +187,25 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: Colors.pink,
-        padding: 15,
+        height: HEADER_HEIGHT, // 50px
+        paddingHorizontal: 15,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 10,
     },
     backButton: {
         marginRight: 10,
     },
     headerTitle: {
-        fontSize: 20,
+        fontSize: 20, // Giảm fontSize để vừa với chiều cao 50px
         color: '#fff',
         fontWeight: 'bold',
     },
     scrollContainer: {
         paddingHorizontal: 15,
+        paddingTop: HEADER_HEIGHT, // Đẩy nội dung xuống dưới header
         paddingBottom: 30,
     },
     emptyContainer: {

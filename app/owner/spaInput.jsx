@@ -12,6 +12,7 @@ import {
     Platform,
     Image,
     Alert,
+    StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -26,6 +27,8 @@ import { getAuth } from 'firebase/auth';
 import { debounce } from 'lodash';
 import Checkbox from 'expo-checkbox';
 
+const HEADER_HEIGHT = 50;
+
 export default function SpaInputScreen() {
     const router = useRouter();
     const { spaId } = useLocalSearchParams(); // Chỉ lấy spaId
@@ -37,10 +40,10 @@ export default function SpaInputScreen() {
     const [description, setDescription] = useState('');
     const [images, setImages] = useState([]);
     const [services, setServices] = useState({
-        'Chăm sóc da mặt': false,
+        'Chăm sóc da': false,
         'Massage': false,
         'Triệt lông': false,
-        'Phun xăm thẩm mỹ': false,
+        'Phun xăm': false,
         'Làm nail': false,
         'Dịch vụ khác': false,
     });
@@ -94,10 +97,10 @@ export default function SpaInputScreen() {
         setDescription('');
         setImages([]);
         setServices({
-            'Chăm sóc da mặt': false,
+            'Chăm sóc da': false,
             'Massage': false,
             'Triệt lông': false,
-            'Phun xăm thẩm mỹ': false,
+            'Phun xăm': false,
             'Làm nail': false,
             'Dịch vụ khác': false,
         });
@@ -276,7 +279,7 @@ export default function SpaInputScreen() {
         if (!phone.trim()) errors.push('Số điện thoại');
         if (!hours.trim()) errors.push('Giờ hoạt động');
         if (!description.trim()) errors.push('Mô tả');
-        if (images.length !== 3) errors.push('Ảnh Spa (cần đúng 3 ảnh)');
+        if (images.length !== 3) errors.push('Ảnh Spa');
 
         if (errors.length > 0) {
             Alert.alert('Lỗi', `Vui lòng nhập đầy đủ: ${errors.join(', ')}`);
@@ -409,6 +412,11 @@ export default function SpaInputScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
+            <StatusBar
+                backgroundColor={Colors.pink}
+                barStyle="light-content"
+                translucent={false}
+            />
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={{ flex: 1 }}
@@ -429,7 +437,7 @@ export default function SpaInputScreen() {
                         onChangeText={handleInputChange(setName)}
                     />
 
-                    <Text style={styles.label}>Ảnh Spa (chọn đúng 3 ảnh)</Text>
+                    <Text style={styles.label}>Ảnh Spa</Text>
                     <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
                         <Ionicons name="image-outline" size={20} color="#fff" />
                         <Text style={styles.imageButtonText}>
@@ -481,6 +489,7 @@ export default function SpaInputScreen() {
                         style={styles.input}
                         value={hours}
                         onChangeText={handleInputChange(setHours)}
+                        placeholder="VD: 9:00 - 21:00"
                     />
 
                     <Text style={styles.label}>Dịch vụ</Text>
@@ -541,20 +550,41 @@ export default function SpaInputScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#fff' },
+    container: { 
+        flex: 1, 
+        backgroundColor: '#fff',
+    },
     headerContainer: {
         flexDirection: 'row',
         alignItems: 'center',
+        height: HEADER_HEIGHT, // 50px
         backgroundColor: Colors.pink,
-        padding: 15,
+        paddingHorizontal: 15,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 10,
     },
-    backButton: { marginRight: 10 },
-    headerTitle: { fontSize: 20, color: '#fff', fontWeight: 'bold' },
+    backButton: { 
+        marginRight: 10,
+    },
+    headerTitle: { 
+        fontSize: 20, 
+        color: '#fff', 
+        fontWeight: 'bold',
+    },
     scrollContainer: {
         paddingHorizontal: 15,
+        paddingTop: HEADER_HEIGHT, // Đẩy nội dung xuống dưới header
         paddingBottom: 30,
     },
-    label: { fontWeight: 'bold', fontSize: 16, marginBottom: 6, marginTop: 12 },
+    label: { 
+        fontWeight: 'bold', 
+        fontSize: 16, 
+        marginBottom: 6, 
+        marginTop: 12,
+    },
     input: {
         borderWidth: 1,
         borderColor: '#ddd',

@@ -8,10 +8,10 @@ export default function OwnerLayout() {
       }}
     >
       <Stack.Screen name="dashboard" />
-      {/* Thêm các màn hình khác nếu cần */}
-      <Stack.Screen name="profile" />
+      <Stack.Screen name="profile" options={{ headerShown: false }} />
       <Stack.Screen name="spaInput" />
       <Stack.Screen name="spaDetail" options={{ headerShown: false }} />
+      <Stack.Screen name="spaList" options={{ headerShown: false }} />
     </Stack>
   );
 }

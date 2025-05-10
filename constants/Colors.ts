@@ -31,4 +31,5 @@ export const Colors = {
   gray: '#8E8E93',     
   successGreen: '#4CAF50', // Màu xanh đặc trưng cho thành công
   errorRed: '#F44336',
+  green: '#34D399',
 };

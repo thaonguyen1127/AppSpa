@@ -4,23 +4,20 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Animated,
   Dimensions,
   ScrollView,
   FlatList,
   SafeAreaView,
   StatusBar,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/Colors';
+import Sidebar from './slidebar';
 
 const { width } = Dimensions.get('window');
-const SIDEBAR_WIDTH = width * 0.75;
-const HEADER_HEIGHT = 50; // Chiều cao header 50px
+const HEADER_HEIGHT = 50;
 
-// Dữ liệu giả lập
 const featuredServices = [
   { id: '1', name: 'Massage Thư Giãn', description: 'Giảm căng thẳng, thư giãn cơ thể', color: '#FFE4E1' },
   { id: '2', name: 'Chăm Sóc Da Mặt', description: 'Làm sạch và dưỡng da', color: '#FFD1DC' },
@@ -34,26 +31,14 @@ const upcomingAppointments = [
 
 export default function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const sidebarAnimation = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const router = useRouter();
 
   const toggleSidebar = () => {
-    const toValue = isSidebarOpen ? -SIDEBAR_WIDTH : 0;
-    Animated.timing(sidebarAnimation, {
-      toValue,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
     setIsSidebarOpen(!isSidebarOpen);
   };
 
   const closeSidebar = () => {
     if (isSidebarOpen) {
-      Animated.timing(sidebarAnimation, {
-        toValue: -SIDEBAR_WIDTH,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
       setIsSidebarOpen(false);
     }
   };
@@ -88,60 +73,15 @@ export default function Dashboard() {
         barStyle="light-content"
         translucent={false}
       />
-      <Animated.View
-        style={[
-          styles.sidebar,
-          { transform: [{ translateX: sidebarAnimation }] },
-        ]}
-      >
-        <View style={styles.sidebarHeader}>
-          <Text style={styles.sidebarTitle}>Menu Spa</Text>
-          <TouchableOpacity onPress={toggleSidebar}>
-            <Ionicons name="close" size={30} color="#fff" />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.sidebarContent}>
-          <TouchableOpacity style={styles.menuItem} onPress={closeSidebar}>
-            <Ionicons name="home-outline" size={24} color="#374151" />
-            <Text style={styles.menuText}>Dashboard</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => {
-              closeSidebar();
-              router.push('/owner/profile');
-            }}
-          >
-            <Ionicons name="person-outline" size={24} color="#374151" />
-            <Text style={styles.menuText}>Hồ Sơ</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => {
-              closeSidebar();
-              router.push('/owner/spaInput');
-            }}
-          >
-            <Ionicons name="storefront-outline" size={24} color="#374151" />
-            <Text style={styles.menuText}>Thông Tin Spa</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => {
-              closeSidebar();
-              router.push('/owner/spaDetail');
-            }}
-          >
-            <Ionicons name="storefront-outline" size={24} color="#374151" />
-            <Text style={styles.menuText}>Chi tiết Spa</Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
-
+      <Sidebar
+        isSidebarOpen={isSidebarOpen}
+        toggleSidebar={toggleSidebar}
+        closeSidebar={closeSidebar}
+        router={router}
+      />
       {isSidebarOpen && (
         <TouchableOpacity style={styles.overlay} onPress={closeSidebar} />
       )}
-
       <View style={styles.mainContent}>
         <View style={styles.headerContainer}>
           <View style={[styles.header, { height: HEADER_HEIGHT }]}>
@@ -151,7 +91,6 @@ export default function Dashboard() {
             <Text style={styles.headerTitle}>Dashboard Spa</Text>
           </View>
         </View>
-
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT }]}
@@ -162,7 +101,6 @@ export default function Dashboard() {
               <Text style={styles.subGreetingText}>Chào mừng bạn đến với Spa của sự thư giãn</Text>
             </View>
           </View>
-
           <View style={styles.statsContainer}>
             <View style={styles.statBox}>
               <Ionicons name="heart-outline" size={30} color={Colors.pink} />
@@ -175,7 +113,6 @@ export default function Dashboard() {
               <Text style={styles.statLabel}>Lịch Hẹn</Text>
             </View>
           </View>
-
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Dịch Vụ Nổi Bật</Text>
             <FlatList
@@ -188,7 +125,6 @@ export default function Dashboard() {
               key="horizontalServiceList"
             />
           </View>
-
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Lịch Hẹn Sắp Tới</Text>
             <FlatList
@@ -235,45 +171,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#fff',
-  },
-  sidebar: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: SIDEBAR_WIDTH,
-    backgroundColor: '#fff',
-    zIndex: 1000,
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 5,
-  },
-  sidebarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: Colors.pink,
-    padding: 15,
-  },
-  sidebarTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  sidebarContent: {
-    padding: 10,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-  },
-  menuText: {
-    fontSize: 18,
-    marginLeft: 10,
-    color: '#374151',
   },
   overlay: {
     position: 'absolute',
