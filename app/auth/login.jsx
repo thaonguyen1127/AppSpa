@@ -243,10 +243,10 @@ const LoginScreen = () => {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.content}>
-            <Image
+            {/* <Image
               source={require('../../assets/images/logo.png')}
               style={styles.logo}
-            />
+            /> */}
             <Text style={styles.title}>Đăng Nhập</Text>
 
             <View style={styles.inputContainer}>
@@ -346,12 +346,12 @@ const styles = StyleSheet.create({
   content: {
     alignItems: 'center',
   },
-  logo: {
-    width: 100,
-    height: 100,
-    marginBottom: 20,
-    marginTop: 20,
-  },
+  // logo: {
+  //   width: 100,
+  //   height: 100,
+  //   marginBottom: 20,
+  //   marginTop: 20,
+  // },
   title: {
     fontSize: 32,
     fontWeight: 'bold',

@@ -34,6 +34,12 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "locationForegroundPermission": "Ứng dụng cần truy cập vị trí để lấy địa chỉ spa."
+        }
       ]
     ],
     "experiments": {
@@ -47,5 +53,6 @@
         "projectId": "fcf4e040-e6cc-4af4-8b2d-f89f3ed89788"
       }
     }
+    
   }
 }
