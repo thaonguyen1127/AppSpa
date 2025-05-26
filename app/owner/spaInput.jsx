@@ -13,6 +13,7 @@ import {
     Image,
     Alert,
     StatusBar,
+    ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -20,91 +21,179 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
+import MapView, { Marker } from 'react-native-maps';
 import { Colors } from '@/constants/Colors';
 import { db } from '../../src/firebaseConfig';
-import { collection, addDoc, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, setDoc, getDocs } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
-import { debounce } from 'lodash';
 import Checkbox from 'expo-checkbox';
+import DateTimePicker from '@react-native-community/datetimepicker';
+// import NumericInput from 'react-native-numeric-input';
 
 const HEADER_HEIGHT = 50;
+const DEFAULT_REGION = {
+    latitude: 21.0285, // Trung tâm Hà Nội
+    longitude: 105.8048,
+    latitudeDelta: 0.01,
+    longitudeDelta: 0.01,
+};
+const apiKey = '9ba4d4adc5844db3a03ab63ae7caa999';
 
 export default function SpaInputScreen() {
     const router = useRouter();
-    const { spaId } = useLocalSearchParams(); // Chỉ lấy spaId
+    const { spaId, spaData } = useLocalSearchParams();
 
     const [name, setName] = useState('');
     const [address, setAddress] = useState('');
     const [phone, setPhone] = useState('');
-    const [hours, setHours] = useState('');
+    const [openingTime, setOpeningTime] = useState(new Date().setHours(9, 0, 0, 0));
+    const [closingTime, setClosingTime] = useState(new Date().setHours(21, 0, 0, 0));
+    const [showOpeningPicker, setShowOpeningPicker] = useState(false);
+    const [showClosingPicker, setShowClosingPicker] = useState(false);
     const [description, setDescription] = useState('');
     const [images, setImages] = useState([]);
-    const [services, setServices] = useState({
-        'Chăm sóc da': false,
-        'Massage': false,
-        'Triệt lông': false,
-        'Phun xăm': false,
-        'Làm nail': false,
-        'Dịch vụ khác': false,
-    });
+    const [services, setServices] = useState({});
+    const [slotPerHour, setSlotPerHour] = useState(1);
     const [loading, setLoading] = useState(false);
-    const [suggestions, setSuggestions] = useState([]);
     const [coordinates, setCoordinates] = useState(null);
     const [successModalVisible, setSuccessModalVisible] = useState(false);
     const [savedSpaId, setSavedSpaId] = useState(null);
     const [isFormDirty, setIsFormDirty] = useState(false);
+    const [mapModalVisible, setMapModalVisible] = useState(false);
+    const [mapRegion, setMapRegion] = useState(DEFAULT_REGION);
+    const [selectedLocation, setSelectedLocation] = useState(null);
 
-    // Lấy dữ liệu spa nếu chỉnh sửa
     useEffect(() => {
-        const fetchSpaData = async () => {
-            if (spaId) {
-                setLoading(true);
-                try {
+        const initializeForm = async () => {
+            setLoading(true);
+            try {
+                // Fetch services from Firestore
+                const servicesSnapshot = await getDocs(collection(db, 'services'));
+                const servicesData = {};
+                servicesSnapshot.forEach((doc) => {
+                    servicesData[doc.data().name] = false;
+                });
+                setServices(servicesData);
+
+                // Ưu tiên sử dụng spaData từ params nếu có
+                if (spaData) {
+                    try {
+                        const parsedData = JSON.parse(spaData);
+                        setName(parsedData.name || '');
+                        setAddress(parsedData.address || '');
+                        setPhone(parsedData.phone || '');
+                        setOpeningTime(
+                            parsedData.openingTime
+                                ? new Date(parsedData.openingTime)
+                                : new Date().setHours(9, 0, 0, 0)
+                        );
+                        setClosingTime(
+                            parsedData.closingTime
+                                ? new Date(parsedData.closingTime)
+                                : new Date().setHours(21, 0, 0, 0)
+                        );
+                        setDescription(parsedData.description || '');
+                        setSlotPerHour(parsedData.slotPerHour || 1);
+                        setImages(
+                            Array.isArray(parsedData.images)
+                                ? parsedData.images.filter((uri) => typeof uri === 'string' && uri)
+                                : []
+                        );
+                        setServices((prev) => ({
+                            ...prev,
+                            ...parsedData.services,
+                        }));
+                        setCoordinates(parsedData.coordinates || null);
+                        if (parsedData.coordinates) {
+                            setMapRegion({
+                                latitude: parsedData.coordinates.lat,
+                                longitude: parsedData.coordinates.lon,
+                                latitudeDelta: 0.01,
+                                longitudeDelta: 0.01,
+                            });
+                            setSelectedLocation({
+                                latitude: parsedData.coordinates.lat,
+                                longitude: parsedData.coordinates.lon,
+                            });
+                        }
+                        setIsFormDirty(true);
+                    } catch (error) {
+                        console.error('Lỗi parse spaData:', error);
+                        Alert.alert('Lỗi', 'Dữ liệu spa không hợp lệ.');
+                    }
+                }
+
+                // Nếu có spaId, kiểm tra Firestore để đảm bảo dữ liệu mới nhất
+                if (spaId && (!spaData || !JSON.parse(spaData))) {
                     const spaDoc = await getDoc(doc(db, 'spas', spaId));
                     if (spaDoc.exists()) {
                         const data = spaDoc.data();
                         setName(data.name || '');
                         setAddress(data.address || '');
                         setPhone(data.phone || '');
-                        setHours(data.hours || '');
+                        setOpeningTime(
+                            data.openingTime
+                                ? new Date(data.openingTime)
+                                : new Date().setHours(9, 0, 0, 0)
+                        );
+                        setClosingTime(
+                            data.closingTime
+                                ? new Date(data.closingTime)
+                                : new Date().setHours(21, 0, 0, 0)
+                        );
                         setDescription(data.description || '');
+                        setSlotPerHour(data.slotPerHour || 1);
                         setImages(
                             Array.isArray(data.images)
                                 ? data.images.filter((uri) => typeof uri === 'string' && uri)
                                 : []
                         );
-                        setServices(data.services || services);
+                        setServices((prev) => ({
+                            ...prev,
+                            ...data.services,
+                        }));
                         setCoordinates(data.coordinates || null);
+                        if (data.coordinates) {
+                            setMapRegion({
+                                latitude: data.coordinates.lat,
+                                longitude: data.coordinates.lon,
+                                latitudeDelta: 0.01,
+                                longitudeDelta: 0.01,
+                            });
+                            setSelectedLocation({
+                                latitude: data.coordinates.lat,
+                                longitude: data.coordinates.lon,
+                            });
+                        }
                         setIsFormDirty(true);
                     }
-                } catch (error) {
-                    Alert.alert('Lỗi', 'Không thể tải dữ liệu spa: ' + error.message);
-                } finally {
-                    setLoading(false);
+                } else if (!spaId && !spaData) {
+                    resetForm(servicesData);
                 }
-            } else {
-                resetForm();
+            } catch (error) {
+                Alert.alert('Lỗi', 'Không thể tải dữ liệu spa: ' + error.message);
+            } finally {
+                setLoading(false);
             }
         };
-        fetchSpaData();
-    }, [spaId]);
+        initializeForm();
+    }, [spaId, spaData]);
 
-    const resetForm = () => {
+    const resetForm = (servicesData = services) => {
         setName('');
         setAddress('');
         setPhone('');
-        setHours('');
+        setOpeningTime(new Date().setHours(9, 0, 0, 0));
+        setClosingTime(new Date().setHours(21, 0, 0, 0));
         setDescription('');
         setImages([]);
-        setServices({
-            'Chăm sóc da': false,
-            'Massage': false,
-            'Triệt lông': false,
-            'Phun xăm': false,
-            'Làm nail': false,
-            'Dịch vụ khác': false,
-        });
+        setServices(
+            Object.keys(servicesData).reduce((acc, key) => ({ ...acc, [key]: false }), {})
+        );
+        setSlotPerHour(1);
         setCoordinates(null);
+        setMapRegion(DEFAULT_REGION);
+        setSelectedLocation(null);
         setIsFormDirty(false);
     };
 
@@ -162,17 +251,19 @@ export default function SpaInputScreen() {
             if (!result.canceled && result.assets) {
                 const newImages = await Promise.all(
                     result.assets.map(async (asset) => {
-                        // Nén mạnh hơn
                         const manipulatedImage = await ImageManipulator.manipulateAsync(
                             asset.uri,
                             [{ resize: { width: 200 } }],
                             { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
                         );
-                        // Chuyển thành Base64
                         const base64 = await FileSystem.readAsStringAsync(manipulatedImage.uri, {
                             encoding: FileSystem.EncodingType.Base64,
                         });
-                        return `data:image/jpeg;base64,${base64}`;
+                        const base64String = `data:image/jpeg;base64,${base64}`;
+                        if (!base64String.match(/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/)) {
+                            throw new Error('Dữ liệu ảnh không hợp lệ.');
+                        }
+                        return base64String;
                     })
                 );
                 setImages((prevImages) => [...prevImages, ...newImages]);
@@ -191,62 +282,139 @@ export default function SpaInputScreen() {
     const getCurrentLocation = async () => {
         try {
             const { status } = await Location.requestForegroundPermissionsAsync();
+            console.log('Quyền vị trí:', status);
             if (status !== 'granted') {
-                Alert.alert('Lỗi', 'Vui lòng cấp quyền vị trí.');
+                Alert.alert('Lỗi', 'Vui lòng cấp quyền vị trí trong cài đặt thiết bị.');
                 return;
             }
             const location = await Location.getCurrentPositionAsync({});
             const { latitude, longitude } = location.coords;
-            const response = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
-                { headers: { 'User-Agent': 'ProjectSpa' } }
-            );
-            const data = await response.json();
-            if (data?.display_name) {
-                setAddress(data.display_name);
-                setCoordinates({ lat: latitude, lon: longitude });
-                setSuggestions([]);
-                setIsFormDirty(true);
-                Alert.alert('Thành công', 'Lấy vị trí hiện tại thành công.');
-            } else {
-                Alert.alert('Lỗi', 'Không thể lấy địa chỉ.');
+            console.log('Vị trí:', { latitude, longitude });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            try {
+                const response = await fetch(
+                    `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=${apiKey}&language=vi&countrycode=vn`,
+                    { headers: { 'User-Agent': 'ProjectSpa' }, signal: controller.signal }
+                );
+                clearTimeout(timeoutId);
+                const data = await response.json();
+                console.log('Kết quả OpenCage:', data);
+                if (data.results && data.results.length > 0) {
+                    setAddress(data.results[0].formatted);
+                    setCoordinates({ lat: latitude, lon: longitude });
+                    setMapRegion({
+                        latitude,
+                        longitude,
+                        latitudeDelta: 0.01,
+                        longitudeDelta: 0.01,
+                    });
+                    setSelectedLocation({ latitude, longitude });
+                    setIsFormDirty(true);
+                    Alert.alert('Thành công', 'Lấy vị trí hiện tại thành công.');
+                } else {
+                    Alert.alert('Lỗi', 'Không thể lấy địa chỉ từ vị trí. Vui lòng thử lại.');
+                }
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+                throw fetchError;
             }
         } catch (error) {
-            Alert.alert('Lỗi', 'Không thể lấy vị trí: ' + error.message);
+            console.error('Lỗi lấy vị trí:', error);
+            if (error.name === 'AbortError') {
+                Alert.alert('Lỗi', 'Yêu cầu lấy địa chỉ quá thời gian, vui lòng kiểm tra mạng.');
+            } else if (error.message.includes('401')) {
+                Alert.alert('Lỗi', 'API key OpenCage không hợp lệ. Vui lòng kiểm tra key.');
+            } else {
+                Alert.alert('Lỗi', `Không thể lấy vị trí: ${error.message}`);
+            }
         }
     };
 
-    const searchAddressSuggestions = async (input) => {
-        if (!input) {
-            setSuggestions([]);
-            return;
-        }
+    const openMapModal = async () => {
         try {
-            const query = encodeURIComponent(`${input}, Việt Nam`);
-            const response = await fetch(
-                `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=5`,
-                { headers: { 'User-Agent': 'ProjectSpa' } }
-            );
-            const data = await response.json();
-            setSuggestions(data);
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            console.log('Quyền vị trí (bản đồ):', status);
+            if (status !== 'granted') {
+                Alert.alert('Lỗi', 'Vui lòng cấp quyền vị trí để sử dụng bản đồ.');
+                setMapRegion(DEFAULT_REGION);
+                setSelectedLocation(null);
+                setMapModalVisible(true);
+                return;
+            }
+            const location = await Location.getCurrentPositionAsync({});
+            const { latitude, longitude } = location.coords;
+            console.log('Vị trí bản đồ:', { latitude, longitude });
+            setMapRegion({
+                latitude,
+                longitude,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+            });
+            setSelectedLocation({ latitude, longitude });
+            setMapModalVisible(true);
         } catch (error) {
-            console.error('Lỗi tìm địa chỉ:', error);
+            console.error('Lỗi lấy vị trí hiện tại:', error);
+            Alert.alert('Thông báo', 'Không thể lấy vị trí hiện tại, sử dụng vị trí mặc định.');
+            setMapRegion(DEFAULT_REGION);
+            setSelectedLocation(null);
+            setMapModalVisible(true);
         }
     };
 
-    const debouncedSearch = useCallback(debounce(searchAddressSuggestions, 300), []);
+    const handleMapPress = async (event) => {
+        const { latitude, longitude } = event.nativeEvent.coordinate;
+        setSelectedLocation({ latitude, longitude });
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            try {
+                const response = await fetch(
+                    `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=${apiKey}&language=vi&countrycode=vn`,
+                    { headers: { 'User-Agent': 'ProjectSpa' }, signal: controller.signal }
+                );
+                clearTimeout(timeoutId);
+                const data = await response.json();
+                console.log('Kết quả OpenCage (bản đồ):', data);
+                if (data.results && data.results.length > 0) {
+                    setAddress(data.results[0].formatted);
+                } else {
+                    Alert.alert('Lỗi', 'Không thể lấy địa chỉ từ vị trí này.');
+                }
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+                throw fetchError;
+            }
+        } catch (error) {
+            console.error('Lỗi reverse geocoding:', error);
+            if (error.name === 'AbortError') {
+                Alert.alert('Lỗi', 'Yêu cầu lấy địa chỉ quá thời gian, vui lòng kiểm tra mạng.');
+            } else if (error.message.includes('401')) {
+                Alert.alert('Lỗi', 'API key OpenCage không hợp lệ. Vui lòng kiểm tra key.');
+            } else {
+                Alert.alert('Lỗi', 'Không thể lấy địa chỉ từ vị trí này.');
+            }
+        }
+    };
 
-    const selectSuggestion = (item) => {
-        setAddress(item.display_name);
-        setCoordinates({ lat: parseFloat(item.lat), lon: parseFloat(item.lon) });
-        setSuggestions([]);
-        setIsFormDirty(true);
+    const confirmMapSelection = () => {
+        if (selectedLocation) {
+            setCoordinates({
+                lat: selectedLocation.latitude,
+                lon: selectedLocation.longitude,
+            });
+            setMapModalVisible(false);
+            setIsFormDirty(true);
+        } else {
+            Alert.alert('Lỗi', 'Vui lòng chọn một vị trí trên bản đồ.');
+        }
     };
 
     const clearAddress = () => {
         setAddress('');
-        setSuggestions([]);
         setCoordinates(null);
+        setSelectedLocation(null);
+        setMapRegion(DEFAULT_REGION);
         setIsFormDirty(true);
     };
 
@@ -255,31 +423,17 @@ export default function SpaInputScreen() {
         setIsFormDirty(true);
     };
 
-    const geocodeAddress = async (address) => {
-        try {
-            const query = encodeURIComponent(`${address}, Việt Nam`);
-            const response = await fetch(
-                `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
-                { headers: { 'User-Agent': 'ProjectSpa' } }
-            );
-            const data = await response.json();
-            if (data.length > 0) {
-                return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-            }
-            throw new Error('Không tìm thấy tọa độ.');
-        } catch (error) {
-            throw new Error('Lỗi geocode: ' + error.message);
-        }
-    };
-
     const saveSpa = async () => {
         const errors = [];
         if (!name.trim()) errors.push('Tên Spa');
         if (!address.trim()) errors.push('Địa chỉ');
         if (!phone.trim()) errors.push('Số điện thoại');
-        if (!hours.trim()) errors.push('Giờ hoạt động');
+        if (!openingTime) errors.push('Giờ mở cửa');
+        if (!closingTime) errors.push('Giờ đóng cửa');
         if (!description.trim()) errors.push('Mô tả');
         if (images.length !== 3) errors.push('Ảnh Spa');
+        if (!coordinates) errors.push('Vị trí (chọn từ bản đồ hoặc vị trí hiện tại)');
+        if (slotPerHour < 1) errors.push('Số khách tối đa mỗi giờ');
 
         if (errors.length > 0) {
             Alert.alert('Lỗi', `Vui lòng nhập đầy đủ: ${errors.join(', ')}`);
@@ -294,37 +448,34 @@ export default function SpaInputScreen() {
                 throw new Error('Vui lòng đăng nhập để lưu thông tin spa.');
             }
 
-            // Cache userDoc
             const userDocRef = doc(db, 'user', user.uid);
             const userDoc = await getDoc(userDocRef);
             if (!userDoc.exists() || userDoc.data().role !== 'owner') {
                 throw new Error('Bạn không có quyền tạo hoặc chỉnh sửa spa.');
             }
 
-            let finalCoordinates = coordinates;
-            if (!finalCoordinates) {
-                finalCoordinates = await geocodeAddress(address);
-            }
-
-            const spaData = {
+            const spaDataToSave = {
                 name: name.trim(),
                 address: address.trim(),
                 phone: phone.trim(),
-                hours: hours.trim(),
+                openingTime: new Date(openingTime).toISOString(),
+                closingTime: new Date(closingTime).toISOString(),
                 description: description.trim(),
                 images,
                 services,
+                slotPerHour,
                 createdAt: new Date(),
                 ownerId: user.uid,
-                ...(finalCoordinates && { coordinates: finalCoordinates }),
+                coordinates,
+                status: 'pending',
             };
 
             let docRef;
             if (spaId) {
                 docRef = doc(db, 'spas', spaId);
-                await setDoc(docRef, spaData);
+                await setDoc(docRef, spaDataToSave);
             } else {
-                docRef = await addDoc(collection(db, 'spas'), spaData);
+                docRef = await addDoc(collection(db, 'spas'), spaDataToSave);
             }
 
             if (!docRef.id) {
@@ -353,16 +504,6 @@ export default function SpaInputScreen() {
             Alert.alert('Lỗi', 'Không thể điều hướng: ID spa không hợp lệ.');
         }
     };
-
-    const renderSuggestion = (item) => (
-        <TouchableOpacity
-            key={item.place_id.toString()}
-            style={styles.suggestionItem}
-            onPress={() => selectSuggestion(item)}
-        >
-            <Text style={styles.suggestionText}>{item.display_name}</Text>
-        </TouchableOpacity>
-    );
 
     const toggleService = (key) => {
         setServices((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -410,6 +551,14 @@ export default function SpaInputScreen() {
         );
     };
 
+    const formatTime = (date) => {
+        if (!date) return '';
+        return new Date(date).toLocaleTimeString('vi-VN', {
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar
@@ -429,100 +578,167 @@ export default function SpaInputScreen() {
                     <Text style={styles.headerTitle}>{spaId ? 'Chỉnh sửa Spa' : 'Thêm Spa'}</Text>
                 </View>
 
-                <ScrollView contentContainerStyle={styles.scrollContainer}>
-                    <Text style={styles.label}>Tên Spa</Text>
-                    <TextInput
-                        style={styles.input}
-                        value={name}
-                        onChangeText={handleInputChange(setName)}
-                    />
-
-                    <Text style={styles.label}>Ảnh Spa</Text>
-                    <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
-                        <Ionicons name="image-outline" size={20} color="#fff" />
-                        <Text style={styles.imageButtonText}>
-                            {images.length > 0 ? `Chọn thêm (${images.length}/3)` : 'Chọn 3 ảnh'}
-                        </Text>
-                    </TouchableOpacity>
-                    <View style={styles.imagePreviewContainer}>
-                        {images.length > 0 && images.map(renderImage)}
+                {loading ? (
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color={Colors.pink} />
+                        <Text style={styles.loadingText}>Đang tải dữ liệu spa...</Text>
                     </View>
-
-                    <Text style={styles.label}>Địa chỉ</Text>
-                    <View style={styles.addressContainer}>
+                ) : (
+                    <ScrollView contentContainerStyle={styles.scrollContainer}>
+                        <Text style={styles.label}>Tên Spa</Text>
                         <TextInput
-                            style={[styles.input, styles.addressInput]}
-                            value={address}
-                            onChangeText={(text) => {
-                                handleInputChange(setAddress)(text);
-                                debouncedSearch(text);
+                            style={styles.input}
+                            value={name}
+                            onChangeText={handleInputChange(setName)}
+                            placeholder="Nhập tên spa"
+                        />
+
+                        <Text style={styles.label}>Ảnh Spa</Text>
+                        <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
+                            <Ionicons name="image-outline" size={20} color="#fff" />
+                            <Text style={styles.imageButtonText}>
+                                {images.length > 0 ? `Chọn thêm (${images.length}/3)` : 'Chọn 3 ảnh'}
+                            </Text>
+                        </TouchableOpacity>
+                        <View style={styles.imagePreviewContainer}>
+                            {images.length > 0 && images.map(renderImage)}
+                        </View>
+
+                        <Text style={styles.label}>Địa chỉ</Text>
+                        <View style={styles.addressContainer}>
+                            <TextInput
+                                style={[
+                                    styles.input,
+                                    styles.addressInput,
+                                    coordinates && styles.inputSelected,
+                                ]}
+                                value={address}
+                                onChangeText={handleInputChange(setAddress)}
+                                multiline
+                                placeholder="Nhập địa chỉ (VD: Ngõ 104, Triều Khúc, Thanh Xuân, Hà Nội)"
+                            />
+                            {address.length > 0 && (
+                                <TouchableOpacity style={styles.clearButton} onPress={clearAddress}>
+                                    <Ionicons name="close-circle" size={20} color="#666" />
+                                </TouchableOpacity>
+                            )}
+                            {coordinates && (
+                                <View style={styles.checkmarkContainer}>
+                                    <Ionicons name="checkmark-circle" size={20} color={Colors.green} />
+                                </View>
+                            )}
+                        </View>
+                        <View style={styles.locationButtonsContainer}>
+                            <TouchableOpacity style={styles.locationButton} onPress={getCurrentLocation}>
+                                <Ionicons name="location-outline" size={20} color="#fff" />
+                                <Text style={styles.locationButtonText}>Lấy vị trí hiện tại</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.locationButton} onPress={openMapModal}>
+                                <Ionicons name="map-outline" size={20} color="#fff" />
+                                <Text style={styles.locationButtonText}>Chọn trên bản đồ</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.label}>Số điện thoại</Text>
+                        <TextInput
+                            style={styles.input}
+                            keyboardType="phone-pad"
+                            value={phone}
+                            onChangeText={handleInputChange(setPhone)}
+                            placeholder="Nhập số điện thoại"
+                        />
+{/* 
+                        <Text style={styles.label}>Giờ mở cửa</Text>
+                        <TouchableOpacity
+                            style={styles.input}
+                            onPress={() => setShowOpeningPicker(true)}
+                        >
+                            <Text style={styles.timeText}>{formatTime(openingTime)}</Text>
+                        </TouchableOpacity>
+                        {showOpeningPicker && (
+                            <DateTimePicker
+                                value={new Date(openingTime)}
+                                mode="time"
+                                display="default"
+                                onChange={(event, selectedDate) => {
+                                    setShowOpeningPicker(Platform.OS === 'ios');
+                                    if (selectedDate) {
+                                        setOpeningTime(selectedDate.getTime());
+                                        setIsFormDirty(true);
+                                    }
+                                }}
+                            />
+                        )} */}
+
+                        {/* <Text style={styles.label}>Giờ đóng cửa</Text>
+                        <TouchableOpacity
+                            style={styles.input}
+                            onPress={() => setShowClosingPicker(true)}
+                        >
+                            <Text style={styles.timeText}>{formatTime(closingTime)}</Text>
+                        </TouchableOpacity>
+                        {showClosingPicker && (
+                            <DateTimePicker
+                                value={new Date(closingTime)}
+                                mode="time"
+                                display="default"
+                                onChange={(event, selectedDate) => {
+                                    setShowClosingPicker(Platform.OS === 'ios');
+                                    if (selectedDate) {
+                                        setClosingTime(selectedDate.getTime());
+                                        setIsFormDirty(true);
+                                    }
+                                }}
+                            />
+                        )} */}
+
+                        <Text style={styles.label}>Dịch vụ</Text>
+                        <View style={styles.servicesContainer}>
+                            {Object.entries(services).map(([key, value]) => renderService(key, value))}
+                        </View>
+
+                        <Text style={styles.label}>Số khách tối đa mỗi giờ</Text>
+                        <NumericInput
+                            value={slotPerHour}
+                            onChange={(value) => {
+                                setSlotPerHour(value);
+                                setIsFormDirty(true);
                             }}
-                            multiline
+                            minValue={1}
+                            maxValue={50}
+                            step={1}
+                            inputStyle={styles.numericInput}
+                            containerStyle={styles.numericContainer}
                         />
-                        {address.length > 0 && (
-                            <TouchableOpacity style={styles.clearButton} onPress={clearAddress}>
-                                <Ionicons name="close-circle" size={20} color="#666" />
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                    <TouchableOpacity style={styles.locationButton} onPress={getCurrentLocation}>
-                        <Ionicons name="location-outline" size={20} color="#fff" />
-                        <Text style={styles.locationButtonText}>Lấy vị trí hiện tại</Text>
-                    </TouchableOpacity>
 
-                    {suggestions.length > 0 && (
-                        <ScrollView style={styles.suggestionList} nestedScrollEnabled={true}>
-                            {suggestions.map(renderSuggestion)}
-                        </ScrollView>
-                    )}
+                        <Text style={styles.label}>Mô tả</Text>
+                        <View style={styles.descriptionContainer}>
+                            <TextInput
+                                style={[styles.input, styles.descriptionInput]}
+                                value={description}
+                                onChangeText={handleInputChange(setDescription)}
+                                multiline
+                                numberOfLines={4}
+                                placeholder="Nhập mô tả spa"
+                            />
+                            {description.length > 0 && (
+                                <TouchableOpacity style={styles.clearButton} onPress={clearDescription}>
+                                    <Ionicons name="close-circle" size={20} color="#666" />
+                                </TouchableOpacity>
+                            )}
+                        </View>
 
-                    <Text style={styles.label}>Số điện thoại</Text>
-                    <TextInput
-                        style={styles.input}
-                        keyboardType="phone-pad"
-                        value={phone}
-                        onChangeText={handleInputChange(setPhone)}
-                    />
-
-                    <Text style={styles.label}>Giờ hoạt động</Text>
-                    <TextInput
-                        style={styles.input}
-                        value={hours}
-                        onChangeText={handleInputChange(setHours)}
-                        placeholder="VD: 9:00 - 21:00"
-                    />
-
-                    <Text style={styles.label}>Dịch vụ</Text>
-                    <View style={styles.servicesContainer}>
-                        {Object.entries(services).map(([key, value]) => renderService(key, value))}
-                    </View>
-
-                    <Text style={styles.label}>Mô tả</Text>
-                    <View style={styles.descriptionContainer}>
-                        <TextInput
-                            style={[styles.input, styles.descriptionInput]}
-                            value={description}
-                            onChangeText={handleInputChange(setDescription)}
-                            multiline
-                            numberOfLines={4}
-                        />
-                        {description.length > 0 && (
-                            <TouchableOpacity style={styles.clearButton} onPress={clearDescription}>
-                                <Ionicons name="close-circle" size={20} color="#666" />
-                            </TouchableOpacity>
-                        )}
-                    </View>
-
-                    <TouchableOpacity
-                        style={[styles.saveButton, loading && styles.saveButtonDisabled]}
-                        onPress={saveSpa}
-                        disabled={loading}
-                    >
-                        <Text style={styles.saveButtonText}>
-                            {loading ? 'Đang lưu...' : spaId ? 'Cập nhật Spa' : 'Lưu Spa'}
-                        </Text>
-                    </TouchableOpacity>
-                </ScrollView>
+                        <TouchableOpacity
+                            style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+                            onPress={saveSpa}
+                            disabled={loading}
+                        >
+                            <Text style={styles.saveButtonText}>
+                                {loading ? 'Đang lưu...' : spaId ? 'Cập nhật Spa' : 'Lưu Spa'}
+                            </Text>
+                        </TouchableOpacity>
+                    </ScrollView>
+                )}
 
                 <Modal
                     animationType="fade"
@@ -533,13 +749,51 @@ export default function SpaInputScreen() {
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContent}>
                             <Ionicons name="checkmark-circle" size={60} color={Colors.pink} style={styles.modalIcon} />
-                            <Text style={styles.modalTitle}>Thành công!</Text>
-                            <Text style={styles.modalMessage}>Thông tin spa đã được lưu.</Text>
+                            <Text style={styles.modalTitle}>Đã gửi!</Text>
+                            <Text style={styles.modalMessage}>Thông tin spa đã được lưu và đang chờ duyệt.</Text>
                             <TouchableOpacity
                                 style={styles.modalButton}
                                 onPress={handleModalClose}
                             >
                                 <Text style={styles.modalButtonText}>OK</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
+
+                <Modal
+                    animationType="slide"
+                    transparent={false}
+                    visible={mapModalVisible}
+                    onRequestClose={() => setMapModalVisible(false)}
+                >
+                    <View style={styles.mapModalContainer}>
+                        <MapView
+                            style={styles.map}
+                            region={mapRegion}
+                            onRegionChangeComplete={setMapRegion}
+                            onPress={handleMapPress}
+                        >
+                            {selectedLocation && (
+                                <Marker
+                                    coordinate={selectedLocation}
+                                    draggable
+                                    onDragEnd={(e) => handleMapPress(e)}
+                                />
+                            )}
+                        </MapView>
+                        <View style={styles.mapButtonContainer}>
+                            <TouchableOpacity
+                                style={styles.mapButton}
+                                onPress={() => setMapModalVisible(false)}
+                            >
+                                <Text style={styles.mapButtonText}>Hủy</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.mapButton}
+                                onPress={confirmMapSelection}
+                            >
+                                <Text style={styles.mapButtonText}>Xác nhận</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -550,14 +804,14 @@ export default function SpaInputScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { 
-        flex: 1, 
+    container: {
+        flex: 1,
         backgroundColor: '#fff',
     },
     headerContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        height: HEADER_HEIGHT, // 50px
+        height: HEADER_HEIGHT,
         backgroundColor: Colors.pink,
         paddingHorizontal: 15,
         position: 'absolute',
@@ -566,23 +820,23 @@ const styles = StyleSheet.create({
         right: 0,
         zIndex: 10,
     },
-    backButton: { 
+    backButton: {
         marginRight: 10,
     },
-    headerTitle: { 
-        fontSize: 20, 
-        color: '#fff', 
+    headerTitle: {
+        fontSize: 20,
+        color: '#fff',
         fontWeight: 'bold',
     },
     scrollContainer: {
         paddingHorizontal: 15,
-        paddingTop: HEADER_HEIGHT, // Đẩy nội dung xuống dưới header
+        paddingTop: HEADER_HEIGHT,
         paddingBottom: 30,
     },
-    label: { 
-        fontWeight: 'bold', 
-        fontSize: 16, 
-        marginBottom: 6, 
+    label: {
+        fontWeight: 'bold',
+        fontSize: 16,
+        marginBottom: 6,
         marginTop: 12,
     },
     input: {
@@ -594,6 +848,10 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF5F5',
         width: '100%',
     },
+    inputSelected: {
+        borderColor: Colors.green,
+        borderWidth: 2,
+    },
     addressContainer: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -601,7 +859,8 @@ const styles = StyleSheet.create({
     },
     addressInput: {
         flex: 1,
-        paddingRight: 40,
+        paddingRight: 60,
+        minHeight: 50,
     },
     descriptionContainer: {
         flexDirection: 'row',
@@ -616,8 +875,18 @@ const styles = StyleSheet.create({
     },
     clearButton: {
         position: 'absolute',
+        right: 35,
+        top: 12,
+    },
+    checkmarkContainer: {
+        position: 'absolute',
         right: 10,
         top: 12,
+    },
+    locationButtonsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 10,
     },
     locationButton: {
         flexDirection: 'row',
@@ -625,29 +894,13 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.pink,
         borderRadius: 10,
         padding: 10,
-        marginTop: 10,
-        alignSelf: 'flex-start',
+        flex: 1,
+        marginHorizontal: 5,
     },
     locationButtonText: {
         color: '#fff',
         marginLeft: 6,
-    },
-    suggestionList: {
-        marginTop: 10,
-        maxHeight: 180,
-        backgroundColor: '#fff',
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: '#ddd',
-    },
-    suggestionItem: {
-        padding: 10,
-        borderBottomColor: '#eee',
-        borderBottomWidth: 1,
-    },
-    suggestionText: {
         fontSize: 14,
-        color: '#333',
     },
     imageButton: {
         flexDirection: 'row',
@@ -789,5 +1042,55 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 16,
         fontWeight: '600',
+    },
+    mapModalContainer: {
+        flex: 1,
+        backgroundColor: '#fff',
+    },
+    map: {
+        flex: 1,
+    },
+    mapButtonContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        padding: 15,
+        backgroundColor: '#fff',
+    },
+    mapButton: {
+        backgroundColor: Colors.pink,
+        borderRadius: 10,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+    },
+    mapButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        fontSize: 18,
+        color: '#333',
+        marginTop: 10,
+        textAlign: 'center',
+    },
+    timeText: {
+        fontSize: 16,
+        color: '#333',
+    },
+    numericContainer: {
+        marginTop: 6,
+        backgroundColor: '#FFF5F5',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#ddd',
+    },
+    numericInput: {
+        fontSize: 16,
+        color: '#333',
     },
 });

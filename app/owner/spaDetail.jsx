@@ -8,6 +8,7 @@ import {
     TouchableOpacity,
     Image,
     Alert,
+    ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -23,6 +24,7 @@ export default function SpaDetailScreen() {
     const { spaId } = useLocalSearchParams();
     const [spaData, setSpaData] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isNavigating, setIsNavigating] = useState(false);
 
     useEffect(() => {
         const fetchSpaData = async () => {
@@ -75,6 +77,7 @@ export default function SpaDetailScreen() {
 
     const handleEdit = () => {
         if (spaData) {
+            setIsNavigating(true);
             console.log('Sending spaData.images:', spaData.images);
             router.push({
                 pathname: '/owner/spaInput',
@@ -89,10 +92,24 @@ export default function SpaDetailScreen() {
         }
     };
 
+    if (isNavigating) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={Colors.pink} />
+                    <Text style={styles.loadingText}>Đang tải form chỉnh sửa...</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
     if (loading) {
         return (
             <SafeAreaView style={styles.container}>
-                <Text style={styles.loadingText}>Đang tải...</Text>
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={Colors.pink} />
+                    <Text style={styles.loadingText}>Đang tải thông tin spa...</Text>
+                </View>
             </SafeAreaView>
         );
     }
@@ -187,7 +204,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: Colors.pink,
-        height: HEADER_HEIGHT, // 50px
+        height: HEADER_HEIGHT,
         paddingHorizontal: 15,
         position: 'absolute',
         top: 0,
@@ -199,13 +216,13 @@ const styles = StyleSheet.create({
         marginRight: 10,
     },
     headerTitle: {
-        fontSize: 20, // Giảm fontSize để vừa với chiều cao 50px
+        fontSize: 20,
         color: '#fff',
         fontWeight: 'bold',
     },
     scrollContainer: {
         paddingHorizontal: 15,
-        paddingTop: HEADER_HEIGHT, // Đẩy nội dung xuống dưới header
+        paddingTop: HEADER_HEIGHT,
         paddingBottom: 30,
     },
     emptyContainer: {
@@ -296,9 +313,15 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     loadingText: {
         fontSize: 18,
+        color: '#333',
+        marginTop: 10,
         textAlign: 'center',
-        marginTop: 20,
     },
 });

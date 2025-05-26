@@ -29,16 +29,19 @@ const BookingScreen = () => {
   const navigation = useNavigation();
   const HEADER_HEIGHT = 50; // Đồng bộ với Favorite, Notification, BookingHistory, Profile
 
+  // const timeSlots = [];
+  // for (let hour = 8; hour <= 20; hour++) {
+  //   if (hour === 8) {
+  //     timeSlots.push('08:30');
+  //   } else {
+  //     timeSlots.push(`${hour < 10 ? '0' + hour : hour}:00`);
+  //     if (hour < 20) timeSlots.push(`${hour < 10 ? '0' + hour : hour}:30`);
+  //   }
+  // }
   const timeSlots = [];
-  for (let hour = 8; hour <= 20; hour++) {
-    if (hour === 8) {
-      timeSlots.push('08:30');
-    } else {
-      timeSlots.push(`${hour < 10 ? '0' + hour : hour}:00`);
-      if (hour < 20) timeSlots.push(`${hour < 10 ? '0' + hour : hour}:30`);
-    }
+  for (let hour = 8; hour <= 22; hour++) {
+    timeSlots.push(`${hour < 10 ? '0' + hour : hour}:00`);
   }
-
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
