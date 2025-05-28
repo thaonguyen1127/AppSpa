@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -21,6 +21,7 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import MapView, { Marker } from 'react-native-maps';
 import { Colors } from '@/constants/Colors';
 import { db } from '../../src/firebaseConfig';
@@ -28,11 +29,11 @@ import { collection, addDoc, doc, getDoc, setDoc, getDocs } from 'firebase/fires
 import { getAuth } from 'firebase/auth';
 import Checkbox from 'expo-checkbox';
 import DateTimePicker from '@react-native-community/datetimepicker';
-// import NumericInput from 'react-native-numeric-input';
+import { useSpaContext } from '../../src/context/SpaContext';
 
 const HEADER_HEIGHT = 50;
 const DEFAULT_REGION = {
-    latitude: 21.0285, // Trung tâm Hà Nội
+    latitude: 21.0285,
     longitude: 105.8048,
     latitudeDelta: 0.01,
     longitudeDelta: 0.01,
@@ -42,18 +43,19 @@ const apiKey = '9ba4d4adc5844db3a03ab63ae7caa999';
 export default function SpaInputScreen() {
     const router = useRouter();
     const { spaId, spaData } = useLocalSearchParams();
+    const { availableServices, updateAvailableServices } = useSpaContext();
 
     const [name, setName] = useState('');
     const [address, setAddress] = useState('');
     const [phone, setPhone] = useState('');
-    const [openingTime, setOpeningTime] = useState(new Date().setHours(9, 0, 0, 0));
-    const [closingTime, setClosingTime] = useState(new Date().setHours(21, 0, 0, 0));
-    const [showOpeningPicker, setShowOpeningPicker] = useState(false);
-    const [showClosingPicker, setShowClosingPicker] = useState(false);
+    const [openTime, setOpenTime] = useState(new Date());
+    const [closeTime, setCloseTime] = useState(new Date());
+    const [showOpenPicker, setShowOpenPicker] = useState(false);
+    const [showClosePicker, setShowClosePicker] = useState(false);
     const [description, setDescription] = useState('');
     const [images, setImages] = useState([]);
     const [services, setServices] = useState({});
-    const [slotPerHour, setSlotPerHour] = useState(1);
+    const [slotPerHour, setSlotPerHour] = useState('1');
     const [loading, setLoading] = useState(false);
     const [coordinates, setCoordinates] = useState(null);
     const [successModalVisible, setSuccessModalVisible] = useState(false);
@@ -62,96 +64,73 @@ export default function SpaInputScreen() {
     const [mapModalVisible, setMapModalVisible] = useState(false);
     const [mapRegion, setMapRegion] = useState(DEFAULT_REGION);
     const [selectedLocation, setSelectedLocation] = useState(null);
+    
+    // New service states
+    const [customServices, setCustomServices] = useState([]);
+    const [showAddService, setShowAddService] = useState(false);
+    const [newServiceName, setNewServiceName] = useState('');
 
     useEffect(() => {
         const initializeForm = async () => {
             setLoading(true);
             try {
-                // Fetch services from Firestore
-                const servicesSnapshot = await getDocs(collection(db, 'services'));
-                const servicesData = {};
-                servicesSnapshot.forEach((doc) => {
-                    servicesData[doc.data().name] = false;
-                });
-                setServices(servicesData);
-
-                // Ưu tiên sử dụng spaData từ params nếu có
-                if (spaData) {
-                    try {
-                        const parsedData = JSON.parse(spaData);
-                        setName(parsedData.name || '');
-                        setAddress(parsedData.address || '');
-                        setPhone(parsedData.phone || '');
-                        setOpeningTime(
-                            parsedData.openingTime
-                                ? new Date(parsedData.openingTime)
-                                : new Date().setHours(9, 0, 0, 0)
-                        );
-                        setClosingTime(
-                            parsedData.closingTime
-                                ? new Date(parsedData.closingTime)
-                                : new Date().setHours(21, 0, 0, 0)
-                        );
-                        setDescription(parsedData.description || '');
-                        setSlotPerHour(parsedData.slotPerHour || 1);
-                        setImages(
-                            Array.isArray(parsedData.images)
-                                ? parsedData.images.filter((uri) => typeof uri === 'string' && uri)
-                                : []
-                        );
-                        setServices((prev) => ({
-                            ...prev,
-                            ...parsedData.services,
-                        }));
-                        setCoordinates(parsedData.coordinates || null);
-                        if (parsedData.coordinates) {
-                            setMapRegion({
-                                latitude: parsedData.coordinates.lat,
-                                longitude: parsedData.coordinates.lon,
-                                latitudeDelta: 0.01,
-                                longitudeDelta: 0.01,
-                            });
-                            setSelectedLocation({
-                                latitude: parsedData.coordinates.lat,
-                                longitude: parsedData.coordinates.lon,
-                            });
-                        }
-                        setIsFormDirty(true);
-                    } catch (error) {
-                        console.error('Lỗi parse spaData:', error);
-                        Alert.alert('Lỗi', 'Dữ liệu spa không hợp lệ.');
-                    }
+                let initialServices = {};
+                if (availableServices.length > 0) {
+                    initialServices = availableServices.reduce((acc, service) => ({
+                        ...acc,
+                        [service.name]: false,
+                    }), {});
+                } else {
+                    const servicesSnapshot = await getDocs(collection(db, 'services'));
+                    const servicesList = servicesSnapshot.docs.map(doc => ({
+                        name: doc.data().name,
+                        description: doc.data().description,
+                    })) || [{ name: 'Dịch vụ mặc định', description: 'Dịch vụ tạm thời' }];
+                    initialServices = servicesList.reduce((acc, service) => ({
+                        ...acc,
+                        [service.name]: false,
+                    }), {});
+                    updateAvailableServices(servicesList);
                 }
-
-                // Nếu có spaId, kiểm tra Firestore để đảm bảo dữ liệu mới nhất
-                if (spaId && (!spaData || !JSON.parse(spaData))) {
+                setServices(initialServices);
+                if (spaData) {
+                    const parsedData = JSON.parse(spaData);
+                    setName(parsedData.name || '');
+                    setAddress(parsedData.address || '');
+                    setPhone(parsedData.phone || '');
+                    setOpenTime(parsedData.openTime ? new Date(parsedData.openTime) : new Date());
+                    setCloseTime(parsedData.closeTime ? new Date(parsedData.closeTime) : new Date());
+                    setDescription(parsedData.description || '');
+                    setImages(Array.isArray(parsedData.images) ? parsedData.images.filter(uri => typeof uri === 'string' && uri) : []);
+                    setSlotPerHour(parsedData.slotPerHour?.toString() || '1');
+                    setServices(parsedData.services || initialServices);
+                    setCoordinates(parsedData.coordinates || null);
+                    if (parsedData.coordinates) {
+                        setMapRegion({
+                            latitude: parsedData.coordinates.lat,
+                            longitude: parsedData.coordinates.lon,
+                            latitudeDelta: 0.01,
+                            longitudeDelta: 0.01,
+                        });
+                        setSelectedLocation({
+                            latitude: parsedData.coordinates.lat,
+                            longitude: parsedData.coordinates.lon,
+                        });
+                    }
+                    setIsFormDirty(true);
+                } else if (spaId) {
                     const spaDoc = await getDoc(doc(db, 'spas', spaId));
                     if (spaDoc.exists()) {
                         const data = spaDoc.data();
                         setName(data.name || '');
                         setAddress(data.address || '');
                         setPhone(data.phone || '');
-                        setOpeningTime(
-                            data.openingTime
-                                ? new Date(data.openingTime)
-                                : new Date().setHours(9, 0, 0, 0)
-                        );
-                        setClosingTime(
-                            data.closingTime
-                                ? new Date(data.closingTime)
-                                : new Date().setHours(21, 0, 0, 0)
-                        );
+                        setOpenTime(data.openTime ? new Date(data.openTime) : new Date());
+                        setCloseTime(data.closeTime ? new Date(data.closeTime) : new Date());
                         setDescription(data.description || '');
-                        setSlotPerHour(data.slotPerHour || 1);
-                        setImages(
-                            Array.isArray(data.images)
-                                ? data.images.filter((uri) => typeof uri === 'string' && uri)
-                                : []
-                        );
-                        setServices((prev) => ({
-                            ...prev,
-                            ...data.services,
-                        }));
+                        setImages(Array.isArray(data.images) ? data.images.filter(uri => typeof uri === 'string' && uri) : []);
+                        setSlotPerHour(data.slotPerHour?.toString() || '1');
+                        setServices(data.services || initialServices);
                         setCoordinates(data.coordinates || null);
                         if (data.coordinates) {
                             setMapRegion({
@@ -166,53 +145,81 @@ export default function SpaInputScreen() {
                             });
                         }
                         setIsFormDirty(true);
+                    } else {
+                        Alert.alert('Lỗi', 'Không tìm thấy spa.');
                     }
-                } else if (!spaId && !spaData) {
-                    resetForm(servicesData);
+                } else {
+                    resetForm(initialServices);
                 }
             } catch (error) {
-                Alert.alert('Lỗi', 'Không thể tải dữ liệu spa: ' + error.message);
+                Alert.alert('Lỗi', 'Không thể tải dữ liệu: ' + error.message);
             } finally {
                 setLoading(false);
             }
         };
         initializeForm();
-    }, [spaId, spaData]);
+    }, [spaId, spaData, availableServices, updateAvailableServices]);
 
-    const resetForm = (servicesData = services) => {
+    const resetForm = (initialServices = {}) => {
         setName('');
         setAddress('');
         setPhone('');
-        setOpeningTime(new Date().setHours(9, 0, 0, 0));
-        setClosingTime(new Date().setHours(21, 0, 0, 0));
+        setOpenTime(new Date());
+        setCloseTime(new Date());
         setDescription('');
         setImages([]);
-        setServices(
-            Object.keys(servicesData).reduce((acc, key) => ({ ...acc, [key]: false }), {})
-        );
-        setSlotPerHour(1);
+        setServices(initialServices);
+        setSlotPerHour('1');
         setCoordinates(null);
         setMapRegion(DEFAULT_REGION);
         setSelectedLocation(null);
+        setCustomServices([]);
+        setShowAddService(false);
+        setNewServiceName('');
         setIsFormDirty(false);
     };
 
-    const handleInputChange = (setter) => (value) => {
+    const handleInputChange = setter => value => {
         setter(value);
         setIsFormDirty(true);
     };
 
+    const handleSlotChange = (value) => {
+        // Only allow positive integers
+        const numericValue = value.replace(/[^0-9]/g, '');
+        if (numericValue === '' || parseInt(numericValue) < 1) {
+            setSlotPerHour('1');
+        } else {
+            setSlotPerHour(numericValue);
+        }
+        setIsFormDirty(true);
+    };
+
+    const handleTimeChange = (setter, showSetter) => (event, selectedTime) => {
+        showSetter(false);
+        if (selectedTime) {
+            setter(selectedTime);
+            setIsFormDirty(true);
+        }
+    };
+
     const handleBackPress = () => {
+        if (successModalVisible) {
+            resetForm(availableServices.reduce((acc, service) => ({ ...acc, [service.name]: false }), {}));
+            setSuccessModalVisible(false);
+            router.back();
+            return;
+        }
         if (isFormDirty) {
             Alert.alert(
                 'Xác nhận thoát',
-                'Bạn có chắc muốn thoát? Dữ liệu chưa lưu sẽ bị mất.',
+                'Dữ liệu chưa lưu sẽ bị mất. Thoát?',
                 [
                     { text: 'Không', style: 'cancel' },
                     {
                         text: 'Có',
                         onPress: () => {
-                            resetForm();
+                            resetForm(availableServices.reduce((acc, service) => ({ ...acc, [service.name]: false }), {}));
                             router.back();
                         },
                     },
@@ -226,31 +233,24 @@ export default function SpaInputScreen() {
 
     const pickImage = async () => {
         if (images.length >= 3) {
-            Alert.alert('Thông báo', 'Bạn chỉ có thể chọn tối đa 3 ảnh.');
+            Alert.alert('Thông báo', 'Tối đa 3 ảnh.');
             return;
         }
-
         try {
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert(
-                    'Lỗi quyền truy cập',
-                    'Vui lòng cấp quyền truy cập thư viện ảnh trong cài đặt thiết bị.'
-                );
+                Alert.alert('Lỗi', 'Cần cấp quyền truy cập thư viện ảnh.');
                 return;
             }
-
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: 'images',
-                allowsEditing: false,
                 quality: 1,
                 allowsMultipleSelection: true,
                 selectionLimit: 3 - images.length,
             });
-
             if (!result.canceled && result.assets) {
                 const newImages = await Promise.all(
-                    result.assets.map(async (asset) => {
+                    result.assets.map(async asset => {
                         const manipulatedImage = await ImageManipulator.manipulateAsync(
                             asset.uri,
                             [{ resize: { width: 200 } }],
@@ -259,39 +259,47 @@ export default function SpaInputScreen() {
                         const base64 = await FileSystem.readAsStringAsync(manipulatedImage.uri, {
                             encoding: FileSystem.EncodingType.Base64,
                         });
-                        const base64String = `data:image/jpeg;base64,${base64}`;
-                        if (!base64String.match(/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/)) {
-                            throw new Error('Dữ liệu ảnh không hợp lệ.');
-                        }
-                        return base64String;
+                        return `data:image/jpeg;base64,${base64}`;
                     })
                 );
-                setImages((prevImages) => [...prevImages, ...newImages]);
+                setImages(prev => [...prev, ...newImages]);
                 setIsFormDirty(true);
             }
         } catch (error) {
-            Alert.alert('Lỗi', 'Không thể mở thư viện ảnh: ' + error.message);
+            Alert.alert('Lỗi', 'Không thể chọn ảnh: ' + error.message);
         }
     };
 
-    const removeImage = (uri) => {
-        setImages((currentImages) => currentImages.filter((imageUri) => imageUri !== uri));
+    const removeImage = uri => {
+        setImages(current => current.filter(imageUri => imageUri !== uri));
         setIsFormDirty(true);
     };
 
     const getCurrentLocation = async () => {
         try {
             const { status } = await Location.requestForegroundPermissionsAsync();
-            console.log('Quyền vị trí:', status);
             if (status !== 'granted') {
-                Alert.alert('Lỗi', 'Vui lòng cấp quyền vị trí trong cài đặt thiết bị.');
+                Alert.alert('Lỗi', 'Cần cấp quyền vị trí.');
                 return;
             }
-            const location = await Location.getCurrentPositionAsync({});
+            setLoading(true);
+            let location = await Location.getLastKnownPositionAsync({});
+            if (!location) {
+                location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
+            }
             const { latitude, longitude } = location.coords;
-            console.log('Vị trí:', { latitude, longitude });
+            const cachedAddress = await getCachedAddress(latitude, longitude);
+            if (cachedAddress) {
+                setAddress(cachedAddress);
+                setCoordinates({ lat: latitude, lon: longitude });
+                setMapRegion({ latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 });
+                setSelectedLocation({ latitude, longitude });
+                setIsFormDirty(true);
+                Alert.alert('Thành công', 'Lấy vị trí thành công.');
+                return;
+            }
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
             try {
                 const response = await fetch(
                     `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=${apiKey}&language=vi&countrycode=vn`,
@@ -299,75 +307,81 @@ export default function SpaInputScreen() {
                 );
                 clearTimeout(timeoutId);
                 const data = await response.json();
-                console.log('Kết quả OpenCage:', data);
                 if (data.results && data.results.length > 0) {
-                    setAddress(data.results[0].formatted);
+                    const formattedAddress = data.results[0].formatted;
+                    setAddress(formattedAddress);
                     setCoordinates({ lat: latitude, lon: longitude });
-                    setMapRegion({
-                        latitude,
-                        longitude,
-                        latitudeDelta: 0.01,
-                        longitudeDelta: 0.01,
-                    });
+                    setMapRegion({ latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 });
                     setSelectedLocation({ latitude, longitude });
+                    await cacheAddress(latitude, longitude, formattedAddress);
                     setIsFormDirty(true);
-                    Alert.alert('Thành công', 'Lấy vị trí hiện tại thành công.');
+                    Alert.alert('Thành công', 'Lấy vị trí thành công.');
                 } else {
-                    Alert.alert('Lỗi', 'Không thể lấy địa chỉ từ vị trí. Vui lòng thử lại.');
+                    Alert.alert('Lỗi', 'Không thể lấy địa chỉ.');
                 }
             } catch (fetchError) {
                 clearTimeout(timeoutId);
-                throw fetchError;
+                Alert.alert('Lỗi', fetchError.name === 'AbortError' ? 'Yêu cầu quá thời gian.' : 'Không thể lấy địa chỉ: ' + fetchError.message);
             }
         } catch (error) {
-            console.error('Lỗi lấy vị trí:', error);
-            if (error.name === 'AbortError') {
-                Alert.alert('Lỗi', 'Yêu cầu lấy địa chỉ quá thời gian, vui lòng kiểm tra mạng.');
-            } else if (error.message.includes('401')) {
-                Alert.alert('Lỗi', 'API key OpenCage không hợp lệ. Vui lòng kiểm tra key.');
-            } else {
-                Alert.alert('Lỗi', `Không thể lấy vị trí: ${error.message}`);
-            }
+            Alert.alert('Lỗi', 'Không thể lấy vị trí: ' + error.message);
+        } finally {
+            setLoading(false);
         }
     };
 
     const openMapModal = async () => {
         try {
             const { status } = await Location.requestForegroundPermissionsAsync();
-            console.log('Quyền vị trí (bản đồ):', status);
             if (status !== 'granted') {
-                Alert.alert('Lỗi', 'Vui lòng cấp quyền vị trí để sử dụng bản đồ.');
+                Alert.alert('Lỗi', 'Cần cấp quyền vị trí.');
                 setMapRegion(DEFAULT_REGION);
                 setSelectedLocation(null);
                 setMapModalVisible(true);
                 return;
             }
-            const location = await Location.getCurrentPositionAsync({});
+            setLoading(true);
+            let location = await Location.getLastKnownPositionAsync({});
+            if (!location) {
+                location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
+            }
             const { latitude, longitude } = location.coords;
-            console.log('Vị trí bản đồ:', { latitude, longitude });
-            setMapRegion({
-                latitude,
-                longitude,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-            });
+            setMapRegion({ latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 });
             setSelectedLocation({ latitude, longitude });
             setMapModalVisible(true);
         } catch (error) {
-            console.error('Lỗi lấy vị trí hiện tại:', error);
-            Alert.alert('Thông báo', 'Không thể lấy vị trí hiện tại, sử dụng vị trí mặc định.');
+            Alert.alert('Thông báo', 'Không thể lấy vị trí, dùng vị trí mặc định.');
             setMapRegion(DEFAULT_REGION);
             setSelectedLocation(null);
             setMapModalVisible(true);
+        } finally {
+            setLoading(false);
         }
     };
 
-    const handleMapPress = async (event) => {
+    const handleMapPress = event => {
         const { latitude, longitude } = event.nativeEvent.coordinate;
         setSelectedLocation({ latitude, longitude });
+    };
+
+    const confirmMapSelection = async () => {
+        if (!selectedLocation) {
+            Alert.alert('Lỗi', 'Chọn một vị trí trên bản đồ.');
+            return;
+        }
+        setLoading(true);
         try {
+            const { latitude, longitude } = selectedLocation;
+            const cachedAddress = await getCachedAddress(latitude, longitude);
+            if (cachedAddress) {
+                setAddress(cachedAddress);
+                setCoordinates({ lat: latitude, lon: longitude });
+                setMapModalVisible(false);
+                setIsFormDirty(true);
+                return;
+            }
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
             try {
                 const response = await fetch(
                     `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=${apiKey}&language=vi&countrycode=vn`,
@@ -375,39 +389,51 @@ export default function SpaInputScreen() {
                 );
                 clearTimeout(timeoutId);
                 const data = await response.json();
-                console.log('Kết quả OpenCage (bản đồ):', data);
                 if (data.results && data.results.length > 0) {
-                    setAddress(data.results[0].formatted);
+                    const formattedAddress = data.results[0].formatted;
+                    setAddress(formattedAddress);
+                    setCoordinates({ lat: latitude, lon: longitude });
+                    await cacheAddress(latitude, longitude, formattedAddress);
+                    setMapModalVisible(false);
+                    setIsFormDirty(true);
                 } else {
-                    Alert.alert('Lỗi', 'Không thể lấy địa chỉ từ vị trí này.');
+                    Alert.alert('Lỗi', 'Không thể lấy địa chỉ.');
                 }
             } catch (fetchError) {
                 clearTimeout(timeoutId);
-                throw fetchError;
+                Alert.alert('Lỗi', fetchError.name === 'AbortError' ? 'Yêu cầu quá thời gian.' : 'Không thể lấy địa chỉ: ' + fetchError.message);
             }
         } catch (error) {
-            console.error('Lỗi reverse geocoding:', error);
-            if (error.name === 'AbortError') {
-                Alert.alert('Lỗi', 'Yêu cầu lấy địa chỉ quá thời gian, vui lòng kiểm tra mạng.');
-            } else if (error.message.includes('401')) {
-                Alert.alert('Lỗi', 'API key OpenCage không hợp lệ. Vui lòng kiểm tra key.');
-            } else {
-                Alert.alert('Lỗi', 'Không thể lấy địa chỉ từ vị trí này.');
-            }
+            Alert.alert('Lỗi', 'Không thể xử lý vị trí: ' + error.message);
+        } finally {
+            setLoading(false);
         }
     };
 
-    const confirmMapSelection = () => {
-        if (selectedLocation) {
-            setCoordinates({
-                lat: selectedLocation.latitude,
-                lon: selectedLocation.longitude,
-            });
-            setMapModalVisible(false);
-            setIsFormDirty(true);
-        } else {
-            Alert.alert('Lỗi', 'Vui lòng chọn một vị trí trên bản đồ.');
+    const cacheAddress = async (latitude, longitude, address) => {
+        try {
+            const key = `address_${latitude.toFixed(4)}_${longitude.toFixed(4)}`;
+            await AsyncStorage.setItem(key, JSON.stringify({ address, timestamp: Date.now() }));
+        } catch (error) {
+            console.warn('Lỗi lưu cache địa chỉ:', error);
         }
+    };
+
+    const getCachedAddress = async (latitude, longitude) => {
+        try {
+            const key = `address_${latitude.toFixed(4)}_${longitude.toFixed(4)}`;
+            const cached = await AsyncStorage.getItem(key);
+            if (cached) {
+                const { address, timestamp } = JSON.parse(cached);
+                if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
+                    return address;
+                }
+                await AsyncStorage.removeItem(key);
+            }
+        } catch (error) {
+            console.warn('Lỗi đọc cache địa chỉ:', error);
+        }
+        return null;
     };
 
     const clearAddress = () => {
@@ -423,53 +449,77 @@ export default function SpaInputScreen() {
         setIsFormDirty(true);
     };
 
+    // New service functions
+    const addCustomService = () => {
+        if (newServiceName.trim()) {
+            const newService = {
+                id: Date.now().toString(),
+                name: newServiceName.trim(),
+                isCustom: true
+            };
+            setCustomServices(prev => [...prev, newService]);
+            setServices(prev => ({ ...prev, [newService.name]: true }));
+            setNewServiceName('');
+            setShowAddService(false);
+            setIsFormDirty(true);
+        }
+    };
+
+    const removeCustomService = (serviceId) => {
+        const serviceToRemove = customServices.find(s => s.id === serviceId);
+        if (serviceToRemove) {
+            setCustomServices(prev => prev.filter(s => s.id !== serviceId));
+            setServices(prev => {
+                const newServices = { ...prev };
+                delete newServices[serviceToRemove.name];
+                return newServices;
+            });
+            setIsFormDirty(true);
+        }
+    };
+
+    const cancelAddService = () => {
+        setNewServiceName('');
+        setShowAddService(false);
+    };
+
     const saveSpa = async () => {
         const errors = [];
         if (!name.trim()) errors.push('Tên Spa');
         if (!address.trim()) errors.push('Địa chỉ');
         if (!phone.trim()) errors.push('Số điện thoại');
-        if (!openingTime) errors.push('Giờ mở cửa');
-        if (!closingTime) errors.push('Giờ đóng cửa');
+        if (!slotPerHour || isNaN(slotPerHour) || Number(slotPerHour) <= 0) errors.push('Số khách/giờ');
         if (!description.trim()) errors.push('Mô tả');
         if (images.length !== 3) errors.push('Ảnh Spa');
-        if (!coordinates) errors.push('Vị trí (chọn từ bản đồ hoặc vị trí hiện tại)');
-        if (slotPerHour < 1) errors.push('Số khách tối đa mỗi giờ');
+        if (!coordinates) errors.push('Vị trí');
 
         if (errors.length > 0) {
             Alert.alert('Lỗi', `Vui lòng nhập đầy đủ: ${errors.join(', ')}`);
             return;
         }
-
         setLoading(true);
         try {
             const auth = getAuth();
             const user = auth.currentUser;
-            if (!user) {
-                throw new Error('Vui lòng đăng nhập để lưu thông tin spa.');
-            }
-
-            const userDocRef = doc(db, 'user', user.uid);
-            const userDoc = await getDoc(userDocRef);
-            if (!userDoc.exists() || userDoc.data().role !== 'owner') {
-                throw new Error('Bạn không có quyền tạo hoặc chỉnh sửa spa.');
-            }
+            if (!user) throw new Error('Vui lòng đăng nhập.');
+            const userDoc = await getDoc(doc(db, 'user', user.uid));
+            if (!userDoc.exists() || userDoc.data().role !== 'owner') throw new Error('Bạn không có quyền.');
 
             const spaDataToSave = {
                 name: name.trim(),
                 address: address.trim(),
                 phone: phone.trim(),
-                openingTime: new Date(openingTime).toISOString(),
-                closingTime: new Date(closingTime).toISOString(),
+                openTime: openTime.toISOString(),
+                closeTime: closeTime.toISOString(),
                 description: description.trim(),
                 images,
                 services,
-                slotPerHour,
+                slotPerHour: Number(slotPerHour),
                 createdAt: new Date(),
                 ownerId: user.uid,
                 coordinates,
                 status: 'pending',
             };
-
             let docRef;
             if (spaId) {
                 docRef = doc(db, 'spas', spaId);
@@ -477,11 +527,6 @@ export default function SpaInputScreen() {
             } else {
                 docRef = await addDoc(collection(db, 'spas'), spaDataToSave);
             }
-
-            if (!docRef.id) {
-                throw new Error('Không thể tạo spa: ID không hợp lệ.');
-            }
-
             setSavedSpaId(docRef.id);
             setSuccessModalVisible(true);
             setIsFormDirty(false);
@@ -495,97 +540,93 @@ export default function SpaInputScreen() {
     const handleModalClose = () => {
         setSuccessModalVisible(false);
         if (savedSpaId) {
-            resetForm();
-            router.push({
-                pathname: '/owner/spaDetail',
-                params: { spaId: savedSpaId },
-            });
+            resetForm(availableServices.reduce((acc, service) => ({ ...acc, [service.name]: false }), {}));
+            router.push({ pathname: '/owner/spaDetail', params: { spaId: savedSpaId } });
         } else {
-            Alert.alert('Lỗi', 'Không thể điều hướng: ID spa không hợp lệ.');
+            Alert.alert('Lỗi', 'ID spa không hợp lệ.');
         }
     };
 
-    const toggleService = (key) => {
-        setServices((prev) => ({ ...prev, [key]: !prev[key] }));
+    const toggleService = key => {
+        setServices(prev => ({ ...prev, [key]: !prev[key] }));
         setIsFormDirty(true);
     };
 
-    const renderService = (key, value) => (
+    const renderService = service => (
         <TouchableOpacity
-            key={key}
-            style={[styles.serviceItem, value && styles.serviceItemSelected]}
-            onPress={() => toggleService(key)}
-            activeOpacity={0.8}
+            key={service.name}
+            style={[styles.serviceItem, services[service.name] && styles.serviceItemSelected]}
+            onPress={() => toggleService(service.name)}
         >
-            <Text style={[styles.serviceText, value && styles.serviceTextSelected]} numberOfLines={1}>
-                {key}
-            </Text>
             <Checkbox
-                value={value}
-                onValueChange={() => toggleService(key)}
-                color={value ? Colors.pink : undefined}
-                style={styles.serviceCheckbox}
+                value={services[service.name]}
+                onValueChange={() => toggleService(service.name)}
+                color={services[service.name] ? Colors.pink : undefined}
+                style={styles.checkbox}
             />
+            <Text style={[styles.serviceText, services[service.name] && styles.serviceTextSelected]} numberOfLines={1}>
+                {service.name}
+            </Text>
         </TouchableOpacity>
     );
 
-    const renderImage = (uri, index) => {
-        if (!uri || typeof uri !== 'string') {
-            return (
-                <View key={`${index}-error`} style={styles.singleImagePreview}>
-                    <Text style={styles.imageErrorText}>Ảnh không tải được</Text>
-                </View>
-            );
-        }
-        return (
-            <View key={`${uri}-${index}`} style={styles.singleImagePreview}>
-                <Image
-                    source={{ uri }}
-                    style={styles.imagePreview}
-                    placeholder={{ uri: 'https://via.placeholder.com/80x60.png?text=Loading' }}
-                />
-                <TouchableOpacity onPress={() => removeImage(uri)} style={styles.removeImageButton}>
-                    <Ionicons name="close-circle" size={18} color="#fff" />
-                </TouchableOpacity>
-            </View>
-        );
-    };
+    const renderCustomService = service => (
+        <TouchableOpacity
+            key={service.id}
+            style={[styles.serviceItem, styles.serviceItemSelected]}
+        >
+            <Checkbox
+                value={true}
+                color={Colors.pink}
+                style={styles.checkbox}
+                disabled
+            />
+            <Text style={[styles.serviceText, styles.serviceTextSelected]} numberOfLines={1}>
+                {service.name}
+            </Text>
+            <TouchableOpacity 
+                style={styles.deleteServiceButton} 
+                onPress={() => removeCustomService(service.id)}
+            >
+                <Ionicons name="close-circle" size={20} color={Colors.pink} />
+            </TouchableOpacity>
+        </TouchableOpacity>
+    );
 
-    const formatTime = (date) => {
-        if (!date) return '';
-        return new Date(date).toLocaleTimeString('vi-VN', {
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    };
+    const renderImage = (uri, index) => (
+        <View key={`${uri}-${index}`} style={styles.imagePreviewContainer}>
+            <Image source={{ uri }} style={styles.imagePreview} />
+            <TouchableOpacity onPress={() => removeImage(uri)} style={styles.removeImageButton}>
+                <Ionicons name="close-circle" size={18} color="#fff" />
+            </TouchableOpacity>
+        </View>
+    );
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar
-                backgroundColor={Colors.pink}
-                barStyle="light-content"
-                translucent={false}
-            />
+            <StatusBar backgroundColor={Colors.pink} barStyle="light-content" />
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                style={{ flex: 1 }}
+                style={styles.flex}
                 keyboardVerticalOffset={80}
             >
-                <View style={styles.headerContainer}>
-                    <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={handleBackPress}>
                         <Ionicons name="arrow-back" size={28} color="#fff" />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>{spaId ? 'Chỉnh sửa Spa' : 'Thêm Spa'}</Text>
                 </View>
 
                 {loading ? (
-                    <View style={styles.loadingContainer}>
+                    <View style={styles.loading}>
                         <ActivityIndicator size="large" color={Colors.pink} />
-                        <Text style={styles.loadingText}>Đang tải dữ liệu spa...</Text>
+                        <Text style={styles.text}>Đang tải...</Text>
                     </View>
                 ) : (
-                    <ScrollView contentContainerStyle={styles.scrollContainer}>
-                        <Text style={styles.label}>Tên Spa</Text>
+                    <ScrollView contentContainerStyle={styles.scroll}>
+                        <Text style={styles.label}>
+                            Tên Spa <Text style={styles.requiredAsterisk}>*</Text>
+                        </Text>
                         <TextInput
                             style={styles.input}
                             value={name}
@@ -593,53 +634,66 @@ export default function SpaInputScreen() {
                             placeholder="Nhập tên spa"
                         />
 
-                        <Text style={styles.label}>Ảnh Spa</Text>
-                        <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
+                        <Text style={styles.label}>
+                            Ảnh Spa <Text style={styles.requiredAsterisk}>*</Text>
+                        </Text>
+                        <TouchableOpacity style={styles.compactButton} onPress={pickImage}>
                             <Ionicons name="image-outline" size={20} color="#fff" />
-                            <Text style={styles.imageButtonText}>
-                                {images.length > 0 ? `Chọn thêm (${images.length}/3)` : 'Chọn 3 ảnh'}
+                            <Text style={styles.buttonText}>
+                                {images.length > 0 ? `Chọn (${images.length}/3)` : 'Chọn 3 ảnh'}
                             </Text>
                         </TouchableOpacity>
-                        <View style={styles.imagePreviewContainer}>
-                            {images.length > 0 && images.map(renderImage)}
+                        <View style={styles.imageContainer}>
+                            {images.map(renderImage)}
                         </View>
 
-                        <Text style={styles.label}>Địa chỉ</Text>
-                        <View style={styles.addressContainer}>
+                        <Text style={styles.label}>
+                            Địa chỉ <Text style={styles.requiredAsterisk}>*</Text>
+                        </Text>
+                        <View style={styles.addressInputContainer}>
                             <TextInput
                                 style={[
-                                    styles.input,
+                                    styles.input, 
                                     styles.addressInput,
-                                    coordinates && styles.inputSelected,
+                                    coordinates && styles.inputSelected
                                 ]}
                                 value={address}
                                 onChangeText={handleInputChange(setAddress)}
                                 multiline
-                                placeholder="Nhập địa chỉ (VD: Ngõ 104, Triều Khúc, Thanh Xuân, Hà Nội)"
+                                placeholder="Nhập địa chỉ"
                             />
-                            {address.length > 0 && (
-                                <TouchableOpacity style={styles.clearButton} onPress={clearAddress}>
-                                    <Ionicons name="close-circle" size={20} color="#666" />
-                                </TouchableOpacity>
-                            )}
-                            {coordinates && (
-                                <View style={styles.checkmarkContainer}>
-                                    <Ionicons name="checkmark-circle" size={20} color={Colors.green} />
-                                </View>
-                            )}
+                            <View style={styles.addressIconsContainer}>
+                                {address.length > 0 && (
+                                    <TouchableOpacity
+                                        style={[styles.addressIcon, { right: coordinates ? 40 : 10 }]}
+                                        onPress={clearAddress}
+                                    >
+                                        <Ionicons name="close-circle" size={20} color="#666" />
+                                    </TouchableOpacity>
+                                )}
+                                {coordinates && (
+                                    <TouchableOpacity
+                                        style={[styles.addressIcon, { right: 10 }]}
+                                    >
+                                        <Ionicons name="checkmark-circle" size={20} color={Colors.green} />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
                         </View>
-                        <View style={styles.locationButtonsContainer}>
-                            <TouchableOpacity style={styles.locationButton} onPress={getCurrentLocation}>
+                        <View style={styles.buttonRow}>
+                            <TouchableOpacity style={[styles.button, styles.halfButton]} onPress={getCurrentLocation}>
                                 <Ionicons name="location-outline" size={20} color="#fff" />
-                                <Text style={styles.locationButtonText}>Lấy vị trí hiện tại</Text>
+                                <Text style={styles.buttonText}>Lấy vị trí</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.locationButton} onPress={openMapModal}>
+                            <TouchableOpacity style={[styles.button, styles.halfButton]} onPress={openMapModal}>
                                 <Ionicons name="map-outline" size={20} color="#fff" />
-                                <Text style={styles.locationButtonText}>Chọn trên bản đồ</Text>
+                                <Text style={styles.buttonText}>Chọn trên bản đồ</Text>
                             </TouchableOpacity>
                         </View>
 
-                        <Text style={styles.label}>Số điện thoại</Text>
+                        <Text style={styles.label}>
+                            Số điện thoại <Text style={styles.requiredAsterisk}>*</Text>
+                        </Text>
                         <TextInput
                             style={styles.input}
                             keyboardType="phone-pad"
@@ -647,152 +701,173 @@ export default function SpaInputScreen() {
                             onChangeText={handleInputChange(setPhone)}
                             placeholder="Nhập số điện thoại"
                         />
-{/* 
-                        <Text style={styles.label}>Giờ mở cửa</Text>
-                        <TouchableOpacity
-                            style={styles.input}
-                            onPress={() => setShowOpeningPicker(true)}
-                        >
-                            <Text style={styles.timeText}>{formatTime(openingTime)}</Text>
+
+                        <Text style={styles.label}>
+                            Giờ mở cửa <Text style={styles.requiredAsterisk}>*</Text>
+                        </Text>
+                        <TouchableOpacity style={styles.input} onPress={() => setShowOpenPicker(true)}>
+                            <Text style={styles.text}>
+                                {openTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </Text>
                         </TouchableOpacity>
-                        {showOpeningPicker && (
+                        {showOpenPicker && (
                             <DateTimePicker
-                                value={new Date(openingTime)}
+                                value={openTime}
                                 mode="time"
                                 display="default"
-                                onChange={(event, selectedDate) => {
-                                    setShowOpeningPicker(Platform.OS === 'ios');
-                                    if (selectedDate) {
-                                        setOpeningTime(selectedDate.getTime());
-                                        setIsFormDirty(true);
-                                    }
-                                }}
+                                onChange={handleTimeChange(setOpenTime, setShowOpenPicker)}
                             />
-                        )} */}
+                        )}
 
-                        {/* <Text style={styles.label}>Giờ đóng cửa</Text>
-                        <TouchableOpacity
-                            style={styles.input}
-                            onPress={() => setShowClosingPicker(true)}
-                        >
-                            <Text style={styles.timeText}>{formatTime(closingTime)}</Text>
+                        <Text style={styles.label}>
+                            Giờ đóng cửa <Text style={styles.requiredAsterisk}>*</Text>
+                        </Text>
+                        <TouchableOpacity style={styles.input} onPress={() => setShowClosePicker(true)}>
+                            <Text style={styles.text}>
+                                {closeTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </Text>
                         </TouchableOpacity>
-                        {showClosingPicker && (
+                        {showClosePicker && (
                             <DateTimePicker
-                                value={new Date(closingTime)}
+                                value={closeTime}
                                 mode="time"
                                 display="default"
-                                onChange={(event, selectedDate) => {
-                                    setShowClosingPicker(Platform.OS === 'ios');
-                                    if (selectedDate) {
-                                        setClosingTime(selectedDate.getTime());
-                                        setIsFormDirty(true);
-                                    }
-                                }}
+                                onChange={handleTimeChange(setCloseTime, setShowClosePicker)}
                             />
-                        )} */}
+                        )}
 
-                        <Text style={styles.label}>Dịch vụ</Text>
-                        <View style={styles.servicesContainer}>
-                            {Object.entries(services).map(([key, value]) => renderService(key, value))}
+                        <Text style={styles.label}>
+                            Dịch vụ <Text style={styles.requiredAsterisk}>*</Text>
+                        </Text>
+                        <View style={styles.services}>
+                            {availableServices.map(renderService)}
+                            {customServices.map(renderCustomService)}
+                        </View>
+                        
+                        {!showAddService ? (
+                            <TouchableOpacity style={styles.addServiceButton} onPress={() => setShowAddService(true)}>
+                                <Ionicons name="add" size={20} color={Colors.pink} />
+                                <Text style={styles.addServiceButtonText}>Dịch vụ mới</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={styles.addServiceContainer}>
+                                <TextInput
+                                    style={styles.input}
+                                    value={newServiceName}
+                                    onChangeText={setNewServiceName}
+                                    placeholder="Nhập tên dịch vụ mới"
+                                />
+                                <View style={styles.addServiceButtons}>
+                                    <TouchableOpacity style={styles.compactActionButton} onPress={addCustomService}>
+                                        <Text style={styles.compactButtonText}>Thêm</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={[styles.compactActionButton, styles.cancelActionButton]} onPress={cancelAddService}>
+                                        <Text style={styles.compactButtonText}>Hủy</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
+
+                        <Text style={styles.label}>
+                            Số khách/giờ <Text style={styles.requiredAsterisk}>*</Text>
+                        </Text>
+                        <View style={styles.numberInputContainer}>
+                            <TextInput
+                                style={[styles.input, styles.numberInput]}
+                                keyboardType="number-pad"
+                                value={slotPerHour}
+                                onChangeText={handleSlotChange}
+                                placeholder="1"
+                                textAlign="center"
+                            />
+                            <View style={styles.numberButtonsColumn}>
+                                <TouchableOpacity 
+                                    style={styles.numberButton}
+                                    onPress={() => {
+                                        const currentValue = parseInt(slotPerHour) || 1;
+                                        if (currentValue < 99) {
+                                            setSlotPerHour((currentValue + 1).toString());
+                                            setIsFormDirty(true);
+                                        }
+                                    }}
+                                >
+                                    <Ionicons name="chevron-up" size={18} color={Colors.pink} />
+                                </TouchableOpacity>
+                                <TouchableOpacity 
+                                    style={styles.numberButton}
+                                    onPress={() => {
+                                        const currentValue = parseInt(slotPerHour) || 1;
+                                        if (currentValue > 1) {
+                                            setSlotPerHour((currentValue - 1).toString());
+                                            setIsFormDirty(true);
+                                        }
+                                    }}
+                                >
+                                    <Ionicons name="chevron-down" size={18} color={Colors.pink} />
+                                </TouchableOpacity>
+                            </View>
                         </View>
 
-                        <Text style={styles.label}>Số khách tối đa mỗi giờ</Text>
-                        <NumericInput
-                            value={slotPerHour}
-                            onChange={(value) => {
-                                setSlotPerHour(value);
-                                setIsFormDirty(true);
-                            }}
-                            minValue={1}
-                            maxValue={50}
-                            step={1}
-                            inputStyle={styles.numericInput}
-                            containerStyle={styles.numericContainer}
-                        />
-
-                        <Text style={styles.label}>Mô tả</Text>
+                        <Text style={styles.label}>
+                            Mô tả <Text style={styles.requiredAsterisk}>*</Text>
+                        </Text>
                         <View style={styles.descriptionContainer}>
                             <TextInput
-                                style={[styles.input, styles.descriptionInput]}
+                                style={[styles.input, styles.multilineInput]}
                                 value={description}
                                 onChangeText={handleInputChange(setDescription)}
                                 multiline
-                                numberOfLines={4}
                                 placeholder="Nhập mô tả spa"
                             />
                             {description.length > 0 && (
-                                <TouchableOpacity style={styles.clearButton} onPress={clearDescription}>
+                                <TouchableOpacity style={styles.descriptionClearButton} onPress={clearDescription}>
                                     <Ionicons name="close-circle" size={20} color="#666" />
                                 </TouchableOpacity>
                             )}
                         </View>
 
                         <TouchableOpacity
-                            style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+                            style={[styles.button, styles.saveButton, loading && styles.disabledButton]}
                             onPress={saveSpa}
                             disabled={loading}
                         >
-                            <Text style={styles.saveButtonText}>
+                            <Text style={styles.buttonText}>
                                 {loading ? 'Đang lưu...' : spaId ? 'Cập nhật Spa' : 'Lưu Spa'}
                             </Text>
                         </TouchableOpacity>
                     </ScrollView>
                 )}
 
-                <Modal
-                    animationType="fade"
-                    transparent={true}
-                    visible={successModalVisible}
-                    onRequestClose={handleModalClose}
-                >
+                <Modal animationType="fade" transparent visible={successModalVisible} onRequestClose={handleModalClose}>
                     <View style={styles.modalOverlay}>
-                        <View style={styles.modalContent}>
+                        <View style={styles.modal}>
                             <Ionicons name="checkmark-circle" size={60} color={Colors.pink} style={styles.modalIcon} />
-                            <Text style={styles.modalTitle}>Đã gửi!</Text>
-                            <Text style={styles.modalMessage}>Thông tin spa đã được lưu và đang chờ duyệt.</Text>
-                            <TouchableOpacity
-                                style={styles.modalButton}
-                                onPress={handleModalClose}
-                            >
-                                <Text style={styles.modalButtonText}>OK</Text>
+                            <Text style={styles.modalTitle}>Thành công!</Text>
+                            <Text style={styles.text}>Thông tin spa đã được lưu và đang chờ duyệt.</Text>
+                            <TouchableOpacity style={styles.button} onPress={handleModalClose}>
+                                <Text style={styles.buttonText}>OK</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
                 </Modal>
 
-                <Modal
-                    animationType="slide"
-                    transparent={false}
-                    visible={mapModalVisible}
-                    onRequestClose={() => setMapModalVisible(false)}
-                >
-                    <View style={styles.mapModalContainer}>
+                <Modal animationType="slide" transparent={false} visible={mapModalVisible} onRequestClose={() => setMapModalVisible(false)}>
+                    <View style={styles.flex}>
                         <MapView
-                            style={styles.map}
+                            style={styles.flex}
                             region={mapRegion}
                             onRegionChangeComplete={setMapRegion}
                             onPress={handleMapPress}
                         >
                             {selectedLocation && (
-                                <Marker
-                                    coordinate={selectedLocation}
-                                    draggable
-                                    onDragEnd={(e) => handleMapPress(e)}
-                                />
+                                <Marker coordinate={selectedLocation} draggable onDragEnd={e => handleMapPress(e)} />
                             )}
                         </MapView>
                         <View style={styles.mapButtonContainer}>
-                            <TouchableOpacity
-                                style={styles.mapButton}
-                                onPress={() => setMapModalVisible(false)}
-                            >
+                            <TouchableOpacity style={styles.mapButton} onPress={() => setMapModalVisible(false)}>
                                 <Text style={styles.mapButtonText}>Hủy</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.mapButton}
-                                onPress={confirmMapSelection}
-                            >
+                            <TouchableOpacity style={styles.mapButton} onPress={confirmMapSelection}>
                                 <Text style={styles.mapButtonText}>Xác nhận</Text>
                             </TouchableOpacity>
                         </View>
@@ -808,36 +883,37 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#fff',
     },
-    headerContainer: {
+    flex: { 
+        flex: 1 
+    },
+    header: {
         flexDirection: 'row',
         alignItems: 'center',
         height: HEADER_HEIGHT,
         backgroundColor: Colors.pink,
         paddingHorizontal: 15,
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 10,
-    },
-    backButton: {
-        marginRight: 10,
     },
     headerTitle: {
-        fontSize: 20,
+        fontSize: 18,
         color: '#fff',
         fontWeight: 'bold',
+        marginLeft: 10,
     },
-    scrollContainer: {
-        paddingHorizontal: 15,
-        paddingTop: HEADER_HEIGHT,
+    scroll: {
+        padding: 15,
+        paddingTop: 10,
         paddingBottom: 30,
     },
     label: {
         fontWeight: 'bold',
         fontSize: 16,
-        marginBottom: 6,
-        marginTop: 12,
+        color: '#333',
+        marginVertical: 8,
+    },
+    requiredAsterisk: {
+        color: Colors.pink,
+        fontWeight: 'bold',
+        fontSize: 16,
     },
     input: {
         borderWidth: 1,
@@ -846,81 +922,85 @@ const styles = StyleSheet.create({
         padding: 12,
         fontSize: 16,
         backgroundColor: '#FFF5F5',
-        width: '100%',
     },
     inputSelected: {
         borderColor: Colors.green,
         borderWidth: 2,
     },
-    addressContainer: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
+    // Address input specific styles
+    addressInputContainer: {
         position: 'relative',
     },
     addressInput: {
-        flex: 1,
-        paddingRight: 60,
+        paddingRight: 70,
         minHeight: 50,
     },
-    descriptionContainer: {
+    addressIconsContainer: {
+        position: 'absolute',
+        right: 0,
+        top: 0,
+        bottom: 0,
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
+    },
+    addressIcon: {
+        position: 'absolute',
+        right: 10,
+        padding: 5,
+    },
+    // Description input styles
+    descriptionContainer: {
         position: 'relative',
     },
-    descriptionInput: {
+    multilineInput: {
+        minHeight: 80,
         textAlignVertical: 'top',
         paddingRight: 40,
-        minHeight: 100,
-        width: '100%',
     },
-    clearButton: {
-        position: 'absolute',
-        right: 35,
-        top: 12,
-    },
-    checkmarkContainer: {
+    descriptionClearButton: {
         position: 'absolute',
         right: 10,
         top: 12,
     },
-    locationButtonsContainer: {
+    button: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.pink,
+        borderRadius: 10,
+        padding: 15,
+        justifyContent: 'center',
+    },
+    // Compact button for image picker
+    compactButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.pink,
+        borderRadius: 10,
+        padding: 12,
+        justifyContent: 'center',
+        alignSelf: 'flex-start',
+        minWidth: 120,
+    },
+    buttonText: {
+        color: '#fff',
+        fontSize: 14,
+        marginLeft: 6,
+    },
+    buttonRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        marginVertical: 10,
+    },
+    halfButton: {
+        flex: 0.48,
+        padding: 12,
+    },
+    imageContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
         marginTop: 10,
-    },
-    locationButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.pink,
-        borderRadius: 10,
-        padding: 10,
-        flex: 1,
-        marginHorizontal: 5,
-    },
-    locationButtonText: {
-        color: '#fff',
-        marginLeft: 6,
-        fontSize: 14,
-    },
-    imageButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.pink,
-        borderRadius: 10,
-        padding: 10,
-        marginTop: 6,
-        alignSelf: 'flex-start',
-    },
-    imageButtonText: {
-        color: '#fff',
-        marginLeft: 6,
     },
     imagePreviewContainer: {
-        flexDirection: 'row',
-        marginTop: 10,
-        flexWrap: 'wrap',
-    },
-    singleImagePreview: {
         position: 'relative',
         marginRight: 10,
         marginBottom: 10,
@@ -930,32 +1010,18 @@ const styles = StyleSheet.create({
         height: 60,
         borderRadius: 8,
     },
-    imageErrorText: {
-        width: 80,
-        height: 60,
-        borderRadius: 8,
-        backgroundColor: '#eee',
-        textAlign: 'center',
-        textAlignVertical: 'center',
-        color: '#666',
-        fontSize: 12,
-    },
     removeImageButton: {
         position: 'absolute',
         top: -8,
         right: -8,
         backgroundColor: 'rgba(0,0,0,0.6)',
         borderRadius: 10,
-        width: 20,
-        height: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
     },
-    servicesContainer: {
+    services: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        marginTop: 8,
         gap: 8,
+        marginBottom: 15,
     },
     serviceItem: {
         width: '48%',
@@ -975,29 +1041,70 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 16,
         color: '#333',
+        marginLeft: 8,
     },
     serviceTextSelected: {
         color: Colors.pink,
         fontWeight: '600',
     },
-    serviceCheckbox: {
+    checkbox: {
         width: 18,
         height: 18,
     },
-    saveButton: {
-        backgroundColor: Colors.pink,
-        padding: 15,
-        borderRadius: 10,
-        marginTop: 20,
+    deleteServiceButton: {
+        marginLeft: 5,
+    },
+    // Add service styles
+    addServiceButton: {
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FFF5F5',
+        borderRadius: 10,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: Colors.pink,
+        borderStyle: 'dashed',
+        marginBottom: 15,
     },
-    saveButtonDisabled: {
-        backgroundColor: '#FCA5A5',
-    },
-    saveButtonText: {
-        color: '#fff',
+    addServiceButtonText: {
+        color: Colors.pink,
         fontSize: 16,
-        fontWeight: 'bold',
+        marginLeft: 8,
+        fontWeight: '600',
+    },
+    addServiceContainer: {
+        marginBottom: 15,
+    },
+    addServiceButtons: {
+        flexDirection: 'row',
+        justifyContent: 'flex-start',
+        marginTop: 10,
+        gap: 10,
+    },
+    // Compact action buttons for add/cancel service
+    compactActionButton: {
+        backgroundColor: Colors.pink,
+        borderRadius: 8,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    cancelActionButton: {
+        backgroundColor: '#666',
+    },
+    compactButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    saveButton: {
+        marginTop: 20,
+        justifyContent: 'center',
+    },
+    disabledButton: {
+        backgroundColor: '#FCA5A5',
     },
     modalOverlay: {
         flex: 1,
@@ -1005,7 +1112,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    modalContent: {
+    modal: {
         backgroundColor: '#fff',
         borderRadius: 15,
         padding: 20,
@@ -1026,30 +1133,16 @@ const styles = StyleSheet.create({
         color: Colors.pink,
         marginBottom: 10,
     },
-    modalMessage: {
+    loading: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    text: {
         fontSize: 16,
         color: '#333',
-        textAlign: 'center',
-        marginBottom: 20,
     },
-    modalButton: {
-        backgroundColor: Colors.pink,
-        borderRadius: 10,
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-    },
-    modalButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    mapModalContainer: {
-        flex: 1,
-        backgroundColor: '#fff',
-    },
-    map: {
-        flex: 1,
-    },
+    // Map modal button styles
     mapButtonContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -1061,36 +1154,41 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         paddingVertical: 10,
         paddingHorizontal: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     mapButtonText: {
         color: '#fff',
         fontSize: 16,
         fontWeight: '600',
     },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    loadingText: {
-        fontSize: 18,
-        color: '#333',
-        marginTop: 10,
-        textAlign: 'center',
-    },
-    timeText: {
-        fontSize: 16,
-        color: '#333',
-    },
-    numericContainer: {
-        marginTop: 6,
-        backgroundColor: '#FFF5F5',
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: '#ddd',
-    },
-    numericInput: {
-        fontSize: 16,
-        color: '#333',
-    },
+    // Number input styles
+   numberInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF5F5',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    overflow: 'hidden',
+    width: 140, 
+},
+numberInput: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 16,
+    padding: 12,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+},
+numberButtonsColumn: {
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 2,
+},
+numberButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+},
 });

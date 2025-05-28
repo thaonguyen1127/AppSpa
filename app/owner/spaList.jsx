@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -8,90 +8,136 @@ import {
     TouchableOpacity,
     Alert,
     StatusBar,
+    ActivityIndicator,
+    RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/Colors';
-import { db } from '../../src/firebaseConfig';
+import { db, auth } from '../../src/firebaseConfig';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { useSpaContext } from '../../src/context/SpaContext';
 
 const HEADER_HEIGHT = 50;
 
 export default function SpaListScreen() {
     const router = useRouter();
-    const auth = getAuth();
     const user = auth.currentUser;
-    const [spas, setSpas] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const { spas, updateSpas } = useSpaContext();
+    const [loading, setLoading] = useState(spas.length === 0);
+    const [refreshing, setRefreshing] = useState(false);
 
-    useEffect(() => {
-        const fetchSpas = async () => {
-            if (!user) {
-                Alert.alert('Lỗi', 'Vui lòng đăng nhập để xem danh sách spa.');
-                router.replace('/login');
+    const fetchSpas = useCallback(async (forceRefresh = false) => {
+        if (!user) {
+            Alert.alert('Lỗi', 'Vui lòng đăng nhập để xem danh sách spa.');
+            router.replace('/');
+            setLoading(false);
+            setRefreshing(false);
+            return;
+        }
+
+        try {
+            const userDoc = await getDoc(doc(db, 'user', user.uid));
+            if (!userDoc.exists() || userDoc.data().role !== 'owner') {
+                Alert.alert('Lỗi', 'Bạn không có quyền xem danh sách spa.');
+                router.replace('/');
                 setLoading(false);
+                setRefreshing(false);
                 return;
             }
 
-            try {
-                const userDoc = await getDoc(doc(db, 'user', user.uid));
-                if (!userDoc.exists() || userDoc.data().role !== 'owner') {
-                    Alert.alert('Lỗi', 'Bạn không có quyền xem danh sách spa.');
-                    router.replace('/login');
-                    setLoading(false);
-                    return;
-                }
-
-                const q = query(
-                    collection(db, 'spas'),
-                    where('ownerId', '==', user.uid)
-                );
-                const querySnapshot = await getDocs(q);
-                const spaList = querySnapshot.docs.map((doc) => ({
-                    id: doc.id,
-                    ...doc.data(),
-                }));
-                setSpas(spaList);
-            } catch (error) {
-                Alert.alert('Lỗi', 'Không thể tải danh sách spa: ' + error.message);
-            } finally {
+            // Nếu không phải refresh và đã có dữ liệu trong context, bỏ qua fetch
+            if (!forceRefresh && spas.length > 0) {
                 setLoading(false);
+                setRefreshing(false);
+                return;
             }
-        };
 
-        fetchSpas();
-    }, [user]);
+            const q = query(
+                collection(db, 'spas'),
+                where('ownerId', '==', user.uid)
+            );
+            const querySnapshot = await getDocs(q);
+            const spaList = querySnapshot.docs.map((doc) => ({
+                id: doc.id,
+                ...doc.data(),
+            }));
 
-    const handleViewDetails = (spaId) => {
+            // Sắp xếp danh sách spa theo createdAt
+            spaList.sort((a, b) => {
+                const dateA = a.createdAt && typeof a.createdAt.toMillis === 'function'
+                    ? a.createdAt.toMillis()
+                    : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+                const dateB = b.createdAt && typeof b.createdAt.toMillis === 'function'
+                    ? b.createdAt.toMillis()
+                    : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+                return dateB - dateA;
+            });
+
+            updateSpas(spaList); // Cập nhật context
+        } catch (error) {
+            Alert.alert('Lỗi', 'Không thể tải danh sách spa: ' + error.message);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    }, [user, spas, updateSpas]);
+
+    useEffect(() => {
+        // Nếu đã có spas trong context, không cần fetch lại
+        if (spas.length === 0) {
+            setLoading(true);
+            fetchSpas();
+        } else {
+            setLoading(false);
+        }
+    }, [fetchSpas, spas.length]);
+
+    const onRefresh = useCallback(() => {
+        setRefreshing(true);
+        fetchSpas(true);
+    }, [fetchSpas]);
+
+    const handleViewDetails = (spa) => {
         router.push({
             pathname: '/owner/spaDetail',
-            params: { spaId },
+            params: { spaId: spa.id, spaData: JSON.stringify(spa) },
         });
     };
 
     const renderSpaItem = ({ item }) => (
         <View style={styles.spaItem}>
-            <Text style={styles.spaTitle}>{item.name}</Text>
+            <View style={styles.spaHeader}>
+                <Text style={styles.spaTitle}>{item.name}</Text>
+                <View style={[
+                    styles.statusBadge,
+                    item.status === 'pending' ? styles.statusPending :
+                    item.status === 'approved' ? styles.statusApproved :
+                    item.status === 'rejected' ? styles.statusRejected : styles.statusPending
+                ]}>
+                    <Text style={styles.statusText}>
+                        {item.status === 'pending' ? 'Chờ duyệt' :
+                         item.status === 'approved' ? 'Đã duyệt' :
+                         item.status === 'rejected' ? 'Từ chối' : 'Chờ duyệt'}
+                    </Text>
+                </View>
+            </View>
             <Text style={styles.spaAddress} numberOfLines={2}>
                 {item.address}
             </Text>
+            <Text style={styles.spaDate}>
+                {item.createdAt && typeof item.createdAt.toMillis === 'function'
+                    ? new Date(item.createdAt.toMillis()).toLocaleDateString('vi-VN')
+                    : (item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : 'N/A')}
+            </Text>
             <TouchableOpacity
                 style={styles.viewDetailsButton}
-                onPress={() => handleViewDetails(item.id)}
+                onPress={() => handleViewDetails(item)}
             >
                 <Text style={styles.viewDetailsText}>Xem chi tiết</Text>
             </TouchableOpacity>
         </View>
     );
-
-    if (loading) {
-        return (
-            <SafeAreaView style={styles.container}>
-                <Text style={styles.loadingText}>Đang tải...</Text>
-            </SafeAreaView>
-        );
-    }
 
     return (
         <SafeAreaView style={styles.container}>
@@ -106,8 +152,12 @@ export default function SpaListScreen() {
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Danh sách Spa</Text>
             </View>
-
-            {spas.length === 0 ? (
+            {loading ? (
+                <View style={styles.loadingOverlay}>
+                    <ActivityIndicator size="large" color={Colors.pink} />
+                    <Text style={styles.loadingText}>Đang tải...</Text>
+                </View>
+            ) : spas.length === 0 ? (
                 <View style={styles.emptyContainer}>
                     <Text style={styles.emptyText}>
                         Chưa có spa nào. Vui lòng thêm spa để xem danh sách.
@@ -125,6 +175,15 @@ export default function SpaListScreen() {
                     renderItem={renderSpaItem}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContainer}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            colors={[Colors.pink]}
+                            tintColor={Colors.pink}
+                            progressViewOffset={HEADER_HEIGHT + 10} // Đẩy spinner xuống
+                        />
+                    }
                 />
             )}
         </SafeAreaView>
@@ -142,10 +201,6 @@ const styles = StyleSheet.create({
         height: HEADER_HEIGHT,
         backgroundColor: Colors.pink,
         paddingHorizontal: 15,
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
         zIndex: 10,
     },
     backButton: {
@@ -158,7 +213,7 @@ const styles = StyleSheet.create({
     },
     listContainer: {
         paddingHorizontal: 15,
-        paddingTop: HEADER_HEIGHT + 10,
+        paddingTop: 10, // Tăng paddingTop để spinner hiển thị đầy đủ
         paddingBottom: 30,
     },
     spaItem: {
@@ -172,19 +227,30 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 3,
     },
+    spaHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 5,
+    },
     spaTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: Colors.pink,
-        marginBottom: 5,
+        color: Colors.darkPink,
+        flex: 1,
     },
     spaAddress: {
         fontSize: 14,
         color: '#333',
+        marginBottom: 5,
+    },
+    spaDate: {
+        fontSize: 12,
+        color: '#666',
         marginBottom: 10,
     },
     viewDetailsButton: {
-        backgroundColor: Colors.pink,
+        backgroundColor: Colors.darkPink,
         paddingVertical: 8,
         paddingHorizontal: 15,
         borderRadius: 8,
@@ -193,6 +259,27 @@ const styles = StyleSheet.create({
     viewDetailsText: {
         color: '#fff',
         fontSize: 14,
+        fontWeight: '600',
+    },
+    statusBadge: {
+        paddingVertical: 4,
+        paddingHorizontal: 10,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    statusPending: {
+        backgroundColor: '#FFC107',
+    },
+    statusApproved: {
+        backgroundColor: '#28A745',
+    },
+    statusRejected: {
+        backgroundColor: '#DC3545',
+    },
+    statusText: {
+        color: '#fff',
+        fontSize: 12,
         fontWeight: '600',
     },
     emptyContainer: {
@@ -219,9 +306,20 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
+    loadingOverlay: {
+        position: 'absolute',
+        top: HEADER_HEIGHT,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.3)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 20,
+    },
     loadingText: {
         fontSize: 18,
-        textAlign: 'center',
-        marginTop: 20,
+        color: '#fff',
+        marginTop: 10,
     },
 });

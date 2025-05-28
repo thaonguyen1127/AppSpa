@@ -13,6 +13,7 @@ const firebaseConfig = {
   appId: "1:484292752450:web:4e9e7f31e01f2d515429db",
 };
 
+
 // Khởi tạo Firebase app
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 

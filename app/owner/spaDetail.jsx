@@ -14,71 +14,78 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import { db } from '../../src/firebaseConfig';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, deleteDoc, enableNetwork, enableIndexedDbPersistence } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const HEADER_HEIGHT = 50;
-
 export default function SpaDetailScreen() {
     const router = useRouter();
-    const { spaId } = useLocalSearchParams();
-    const [spaData, setSpaData] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [isNavigating, setIsNavigating] = useState(false);
+    const { spaId, spaData: spaDataParam } = useLocalSearchParams();
+    const [spaData, setSpaData] = useState(spaDataParam ? JSON.parse(spaDataParam) : null);
+    const [loadingState, setLoadingState] = useState(spaDataParam ? 'none' : 'initial'); // 'initial', 'navigating', 'none'
 
     useEffect(() => {
         const fetchSpaData = async () => {
+            // console.log('Fetching spa data for spaId:', spaId);
+            if (!spaId) {
+                Alert.alert('Lỗi', 'Không tìm thấy ID spa.');
+                setLoadingState('none');
+                return;
+            }
+
             try {
                 const auth = getAuth();
                 const user = auth.currentUser;
                 if (!user) {
                     Alert.alert('Lỗi', 'Vui lòng đăng nhập để xem thông tin spa.');
-                    setLoading(false);
+                    setLoadingState('none');
                     return;
                 }
 
                 const userDoc = await getDoc(doc(db, 'user', user.uid));
                 if (!userDoc.exists() || userDoc.data().role !== 'owner') {
                     Alert.alert('Lỗi', 'Bạn không có quyền xem thông tin spa.');
-                    setLoading(false);
+                    setLoadingState('none');
                     return;
                 }
 
-                let spaDoc = null;
-                if (spaId) {
+                // Chỉ gọi Firestore nếu không có spaData từ params
+                if (!spaData) {
                     const docRef = doc(db, 'spas', spaId);
                     const docSnap = await getDoc(docRef);
                     if (docSnap.exists() && docSnap.data().ownerId === user.uid) {
-                        spaDoc = { id: docSnap.id, ...docSnap.data() };
+                        setSpaData({ id: docSnap.id, ...docSnap.data() });
+                    } else {
+                        const q = query(
+                            collection(db, 'spas'),
+                            where('ownerId', '==', user.uid)
+                        );
+                        const querySnapshot = await getDocs(q);
+                        if (!querySnapshot.empty) {
+                            setSpaData({ id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() });
+                        } else {
+                            setSpaData(null);
+                        }
                     }
                 }
-
-                if (!spaDoc) {
-                    const q = query(
-                        collection(db, 'spas'),
-                        where('ownerId', '==', user.uid)
-                    );
-                    const querySnapshot = await getDocs(q);
-                    if (!querySnapshot.empty) {
-                        spaDoc = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
-                    }
-                }
-
-                setSpaData(spaDoc);
             } catch (error) {
+                // console.log('Error fetching spa data:', error);
                 Alert.alert('Lỗi', 'Không thể tải thông tin spa: ' + error.message);
             } finally {
-                setLoading(false);
+                // console.log('Finished fetching spa data');
+                setLoadingState('none');
             }
         };
 
-        fetchSpaData();
-    }, [spaId]);
+        if (!spaData) {
+            fetchSpaData();
+        }
+    }, [spaId, spaData]);
 
     const handleEdit = () => {
         if (spaData) {
-            setIsNavigating(true);
-            console.log('Sending spaData.images:', spaData.images);
+            // console.log('Navigating to spaInput for spaId:', spaData.id);
+            setLoadingState('navigating');
             router.push({
                 pathname: '/owner/spaInput',
                 params: { 
@@ -89,10 +96,40 @@ export default function SpaDetailScreen() {
                     }),
                 },
             });
+            setTimeout(() => {
+                // console.log('Reset loading state');
+                setLoadingState('none');
+            }, 1000);
         }
     };
 
-    if (isNavigating) {
+    const handleDelete = () => {
+        Alert.alert(
+            'Xác nhận xóa',
+            'Bạn có chắc chắn muốn xóa spa này? Hành động này không thể hoàn tác.',
+            [
+                {
+                    text: 'Hủy',
+                    style: 'cancel',
+                },
+                {
+                    text: 'Xóa',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await deleteDoc(doc(db, 'spas', spaData.id));
+                            Alert.alert('Thành công', 'Spa đã được xóa.');
+                            router.replace('/owner/spaList');
+                        } catch (error) {
+                            Alert.alert('Lỗi', 'Không thể xóa spa: ' + error.message);
+                        }
+                    },
+                },
+            ]
+        );
+    };
+
+    if (loadingState === 'navigating') {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.loadingContainer}>
@@ -103,7 +140,7 @@ export default function SpaDetailScreen() {
         );
     }
 
-    if (loading) {
+    if (loadingState === 'initial') {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.loadingContainer}>
@@ -146,16 +183,22 @@ export default function SpaDetailScreen() {
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContainer}>
-                <View style={styles.imageContainer}>
-                    {spaData.images.map((uri, index) => (
-                        <Image
-                            key={`${uri}-${index}`}
-                            source={{ uri }}
-                            style={styles.spaImage}
-                            onError={() => console.log(`Failed to load spa image: ${uri}`)}
-                        />
-                    ))}
-                </View>
+                <Text style={styles.spaTitle}>{spaData.name}</Text>
+
+                {spaData.images && spaData.images.length > 0 && (
+                    <View style={styles.imageContainer}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            {spaData.images.map((uri, index) => (
+                                <Image
+                                    key={`${uri}-${index}`}
+                                    source={{ uri }}
+                                    style={styles.spaImage}
+                                    onError={() => console.log(`Failed to load spa image: ${uri}`)}
+                                />
+                            ))}
+                        </ScrollView>
+                    </View>
+                )}
 
                 <Text style={styles.sectionTitle}>Thông tin chi tiết</Text>
                 <View style={styles.infoContainer}>
@@ -175,7 +218,7 @@ export default function SpaDetailScreen() {
 
                 <Text style={styles.sectionTitle}>Dịch vụ</Text>
                 <View style={styles.servicesContainer}>
-                    {Object.entries(spaData.services)
+                    {Object.entries(spaData.services || {})
                         .filter(([_, value]) => value)
                         .map(([key]) => (
                             <View key={key} style={styles.serviceItem}>
@@ -187,9 +230,14 @@ export default function SpaDetailScreen() {
                 <Text style={styles.sectionTitle}>Mô tả</Text>
                 <Text style={styles.descriptionText}>{spaData.description}</Text>
 
-                <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
-                    <Text style={styles.editButtonText}>Chỉnh sửa</Text>
-                </TouchableOpacity>
+                <View style={styles.buttonContainer}>
+                    <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
+                        <Text style={styles.buttonText}>Chỉnh sửa</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+                        <Text style={styles.buttonText}>Xóa</Text>
+                    </TouchableOpacity>
+                </View>
             </ScrollView>
         </SafeAreaView>
     );
@@ -222,39 +270,21 @@ const styles = StyleSheet.create({
     },
     scrollContainer: {
         paddingHorizontal: 15,
-        paddingTop: HEADER_HEIGHT,
+        paddingTop: HEADER_HEIGHT + 10,
         paddingBottom: 30,
     },
-    emptyContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-    emptyText: {
-        fontSize: 18,
-        color: '#333',
-        marginBottom: 20,
-        textAlign: 'center',
-    },
-    createButton: {
-        backgroundColor: Colors.pink,
-        padding: 15,
-        borderRadius: 10,
-        alignItems: 'center',
-    },
-    createButtonText: {
-        color: '#fff',
-        fontSize: 16,
+    spaTitle: {
+        fontSize: 24,
         fontWeight: 'bold',
+        color: Colors.pink,
+        marginBottom: 10,
     },
     imageContainer: {
-        flexDirection: 'row',
         marginVertical: 10,
     },
     spaImage: {
-        width: 100,
-        height: 80,
+        width: 120,
+        height: 100,
         borderRadius: 8,
         marginRight: 10,
     },
@@ -301,14 +331,50 @@ const styles = StyleSheet.create({
         color: '#333',
         lineHeight: 24,
     },
+    buttonContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 20,
+    },
     editButton: {
         backgroundColor: Colors.pink,
         padding: 15,
         borderRadius: 10,
-        marginTop: 20,
+        flex: 1,
+        marginRight: 10,
         alignItems: 'center',
     },
-    editButtonText: {
+    deleteButton: {
+        backgroundColor: '#DC3545',
+        padding: 15,
+        borderRadius: 10,
+        flex: 1,
+        alignItems: 'center',
+    },
+    buttonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    emptyText: {
+        fontSize: 18,
+        color: '#333',
+        marginBottom: 20,
+        textAlign: 'center',
+    },
+    createButton: {
+        backgroundColor: Colors.pink,
+        padding: 15,
+        borderRadius: 10,
+        alignItems: 'center',
+    },
+    createButtonText: {
         color: '#fff',
         fontSize: 16,
         fontWeight: 'bold',
