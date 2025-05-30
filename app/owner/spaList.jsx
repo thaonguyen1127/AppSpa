@@ -1,3 +1,4 @@
+// src/screens/owner/SpaListScreen.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
@@ -10,9 +11,10 @@ import {
     StatusBar,
     ActivityIndicator,
     RefreshControl,
+    Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import { db, auth } from '../../src/firebaseConfig';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
@@ -20,12 +22,31 @@ import { useSpaContext } from '../../src/context/SpaContext';
 
 const HEADER_HEIGHT = 50;
 
+const serializeSpaData = (spa) => {
+    return {
+        ...spa,
+        createdAt: spa.createdAt?.toMillis
+            ? new Date(spa.createdAt.toMillis()).toISOString()
+            : spa.createdAt
+            ? new Date(spa.createdAt).toISOString()
+            : null,
+        openTime: spa.openTime
+            ? new Date(spa.openTime).toISOString()
+            : null,
+        closeTime: spa.closeTime
+            ? new Date(spa.closeTime).toISOString()
+            : null,
+    };
+};
+
 export default function SpaListScreen() {
     const router = useRouter();
+    const { resetNavigating } = useLocalSearchParams();
     const user = auth.currentUser;
     const { spas, updateSpas } = useSpaContext();
     const [loading, setLoading] = useState(spas.length === 0);
     const [refreshing, setRefreshing] = useState(false);
+    const [navigating, setNavigating] = useState(false);
 
     const fetchSpas = useCallback(async (forceRefresh = false) => {
         if (!user) {
@@ -37,7 +58,7 @@ export default function SpaListScreen() {
         }
 
         try {
-            const userDoc = await getDoc(doc(db, 'user', user.uid));
+            const userDoc = await getDoc(doc(db, 'users', user.uid));
             if (!userDoc.exists() || userDoc.data().role !== 'owner') {
                 Alert.alert('Lỗi', 'Bạn không có quyền xem danh sách spa.');
                 router.replace('/');
@@ -46,7 +67,6 @@ export default function SpaListScreen() {
                 return;
             }
 
-            // Nếu không phải refresh và đã có dữ liệu trong context, bỏ qua fetch
             if (!forceRefresh && spas.length > 0) {
                 setLoading(false);
                 setRefreshing(false);
@@ -63,7 +83,6 @@ export default function SpaListScreen() {
                 ...doc.data(),
             }));
 
-            // Sắp xếp danh sách spa theo createdAt
             spaList.sort((a, b) => {
                 const dateA = a.createdAt && typeof a.createdAt.toMillis === 'function'
                     ? a.createdAt.toMillis()
@@ -74,7 +93,7 @@ export default function SpaListScreen() {
                 return dateB - dateA;
             });
 
-            updateSpas(spaList); // Cập nhật context
+            updateSpas(spaList);
         } catch (error) {
             Alert.alert('Lỗi', 'Không thể tải danh sách spa: ' + error.message);
         } finally {
@@ -84,7 +103,6 @@ export default function SpaListScreen() {
     }, [user, spas, updateSpas]);
 
     useEffect(() => {
-        // Nếu đã có spas trong context, không cần fetch lại
         if (spas.length === 0) {
             setLoading(true);
             fetchSpas();
@@ -93,16 +111,43 @@ export default function SpaListScreen() {
         }
     }, [fetchSpas, spas.length]);
 
+    useEffect(() => {
+        if (resetNavigating === 'true') {
+            setNavigating(false);
+        }
+    }, [resetNavigating]);
+
+    useFocusEffect(
+        useCallback(() => {
+            setTimeout(() => setNavigating(false), 100);
+            return () => {
+                console.log('SpaListScreen unfocused');
+            };
+        }, [])
+    );
+
     const onRefresh = useCallback(() => {
         setRefreshing(true);
         fetchSpas(true);
     }, [fetchSpas]);
 
     const handleViewDetails = (spa) => {
-        router.push({
-            pathname: '/owner/spaDetail',
-            params: { spaId: spa.id, spaData: JSON.stringify(spa) },
-        });
+        if (navigating) return;
+        setNavigating(true);
+        try {
+            const serializedSpa = serializeSpaData(spa);
+            router.push({
+                pathname: '/owner/spaDetail',
+                params: { spaId: spa.id, spaData: JSON.stringify(serializedSpa) },
+            });
+        } catch (error) {
+            Alert.alert('Lỗi', 'Không thể điều hướng: ' + error.message);
+            setNavigating(false);
+        }
+    };
+
+    const handleBack = () => {
+        router.back();
     };
 
     const renderSpaItem = ({ item }) => (
@@ -131,8 +176,9 @@ export default function SpaListScreen() {
                     : (item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : 'N/A')}
             </Text>
             <TouchableOpacity
-                style={styles.viewDetailsButton}
+                style={[styles.viewDetailsButton, navigating && styles.disabledButton]}
                 onPress={() => handleViewDetails(item)}
+                disabled={navigating}
             >
                 <Text style={styles.viewDetailsText}>Xem chi tiết</Text>
             </TouchableOpacity>
@@ -141,17 +187,25 @@ export default function SpaListScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar
-                backgroundColor={Colors.pink}
-                barStyle="light-content"
-                translucent={false}
-            />
+            {Platform.OS !== 'web' && (
+                <StatusBar
+                    backgroundColor={Colors.pink}
+                    barStyle="light-content"
+                    translucent={false}
+                />
+            )}
             <View style={styles.headerContainer}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <TouchableOpacity onPress={handleBack} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={28} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Danh sách Spa</Text>
             </View>
+            {navigating && (
+                <View style={styles.loadingOverlay}>
+                    <ActivityIndicator size="large" color={Colors.pink} />
+                    <Text style={styles.loadingText}>Đang tải chi tiết spa...</Text>
+                </View>
+            )}
             {loading ? (
                 <View style={styles.loadingOverlay}>
                     <ActivityIndicator size="large" color={Colors.pink} />
@@ -181,7 +235,7 @@ export default function SpaListScreen() {
                             onRefresh={onRefresh}
                             colors={[Colors.pink]}
                             tintColor={Colors.pink}
-                            progressViewOffset={HEADER_HEIGHT + 10} // Đẩy spinner xuống
+                            progressViewOffset={HEADER_HEIGHT + 10}
                         />
                     }
                 />
@@ -201,6 +255,7 @@ const styles = StyleSheet.create({
         height: HEADER_HEIGHT,
         backgroundColor: Colors.pink,
         paddingHorizontal: 15,
+        // paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0,
         zIndex: 10,
     },
     backButton: {
@@ -213,7 +268,7 @@ const styles = StyleSheet.create({
     },
     listContainer: {
         paddingHorizontal: 15,
-        paddingTop: 10, // Tăng paddingTop để spinner hiển thị đầy đủ
+        paddingTop: 10,
         paddingBottom: 30,
     },
     spaItem: {
@@ -261,6 +316,9 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
     },
+    disabledButton: {
+        opacity: 0.5,
+    },
     statusBadge: {
         paddingVertical: 4,
         paddingHorizontal: 10,
@@ -269,7 +327,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     statusPending: {
-        backgroundColor: '#FFC107',
+        backgroundColor: '#FFD700',
     },
     statusApproved: {
         backgroundColor: '#28A745',
@@ -308,7 +366,7 @@ const styles = StyleSheet.create({
     },
     loadingOverlay: {
         position: 'absolute',
-        top: HEADER_HEIGHT,
+        top: HEADER_HEIGHT + (Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0),
         bottom: 0,
         left: 0,
         right: 0,

@@ -8,33 +8,37 @@ import {
     TouchableOpacity,
     Image,
     Alert,
+    StatusBar,
     ActivityIndicator,
+    Modal,
+    Dimensions,
+    Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '@/constants/Colors';
-import { db } from '../../src/firebaseConfig';
-import { collection, query, where, getDocs, doc, getDoc, deleteDoc, enableNetwork, enableIndexedDbPersistence } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { db, auth } from '../../src/firebaseConfig';
+import { doc, getDoc, deleteDoc } from 'firebase/firestore';
 
 const HEADER_HEIGHT = 50;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
 export default function SpaDetailScreen() {
     const router = useRouter();
     const { spaId, spaData: spaDataParam } = useLocalSearchParams();
     const [spaData, setSpaData] = useState(spaDataParam ? JSON.parse(spaDataParam) : null);
-    const [loadingState, setLoadingState] = useState(spaDataParam ? 'none' : 'initial'); // 'initial', 'navigating', 'none'
+    const [loadingState, setLoadingState] = useState(spaDataParam ? 'none' : 'initial');
+    const [selectedImage, setSelectedImage] = useState(null);
+    const [modalVisible, setModalVisible] = useState(false);
 
     useEffect(() => {
         const fetchSpaData = async () => {
-            // console.log('Fetching spa data for spaId:', spaId);
-            if (!spaId) {
-                Alert.alert('Lỗi', 'Không tìm thấy ID spa.');
+            if (!spaId || spaData) {
                 setLoadingState('none');
                 return;
             }
 
             try {
-                const auth = getAuth();
                 const user = auth.currentUser;
                 if (!user) {
                     Alert.alert('Lỗi', 'Vui lòng đăng nhập để xem thông tin spa.');
@@ -42,64 +46,65 @@ export default function SpaDetailScreen() {
                     return;
                 }
 
-                const userDoc = await getDoc(doc(db, 'user', user.uid));
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
                 if (!userDoc.exists() || userDoc.data().role !== 'owner') {
                     Alert.alert('Lỗi', 'Bạn không có quyền xem thông tin spa.');
                     setLoadingState('none');
                     return;
                 }
 
-                // Chỉ gọi Firestore nếu không có spaData từ params
-                if (!spaData) {
-                    const docRef = doc(db, 'spas', spaId);
-                    const docSnap = await getDoc(docRef);
-                    if (docSnap.exists() && docSnap.data().ownerId === user.uid) {
-                        setSpaData({ id: docSnap.id, ...docSnap.data() });
-                    } else {
-                        const q = query(
-                            collection(db, 'spas'),
-                            where('ownerId', '==', user.uid)
-                        );
-                        const querySnapshot = await getDocs(q);
-                        if (!querySnapshot.empty) {
-                            setSpaData({ id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() });
-                        } else {
-                            setSpaData(null);
-                        }
-                    }
+                const docRef = doc(db, 'spas', spaId);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists() && docSnap.data().ownerId === user.uid) {
+                    setSpaData({ id: docSnap.id, ...docSnap.data() });
+                } else {
+                    Alert.alert('Lỗi', 'Không tìm thấy thông tin spa.');
+                    setSpaData(null);
                 }
             } catch (error) {
-                // console.log('Error fetching spa data:', error);
                 Alert.alert('Lỗi', 'Không thể tải thông tin spa: ' + error.message);
             } finally {
-                // console.log('Finished fetching spa data');
                 setLoadingState('none');
             }
         };
 
         if (!spaData) {
+            setLoadingState('initial');
             fetchSpaData();
+        } else {
+            setLoadingState('none');
         }
     }, [spaId, spaData]);
 
     const handleEdit = () => {
         if (spaData) {
-            // console.log('Navigating to spaInput for spaId:', spaData.id);
             setLoadingState('navigating');
-            router.push({
-                pathname: '/owner/spaInput',
-                params: { 
-                    spaId: spaData.id, 
-                    spaData: JSON.stringify({
-                        ...spaData,
-                        images: spaData.images || [],
-                    }),
-                },
-            });
-            setTimeout(() => {
-                // console.log('Reset loading state');
-                setLoadingState('none');
-            }, 1000);
+            try {
+                router.push({
+                    pathname: '/owner/spaInput',
+                    params: {
+                        spaId: spaData.id,
+                        spaData: JSON.stringify({
+                            ...spaData,
+                            images: spaData.images || [],
+                            createdAt: spaData.createdAt?.toMillis
+                                ? new Date(spaData.createdAt.toMillis()).toISOString()
+                                : spaData.createdAt
+                                ? new Date(spaData.createdAt).toISOString()
+                                : null,
+                            openTime: spaData.openTime
+                                ? new Date(spaData.openTime).toISOString()
+                                : null,
+                            closeTime: spaData.closeTime
+                                ? new Date(spaData.closeTime).toISOString()
+                                : null,
+                        }),
+                    },
+                });
+            } catch (error) {
+                Alert.alert('Lỗi', 'Không thể điều hướng: ' + error.message);
+            }
+            setTimeout(() => setLoadingState('none'), 1000);
         }
     };
 
@@ -108,10 +113,7 @@ export default function SpaDetailScreen() {
             'Xác nhận xóa',
             'Bạn có chắc chắn muốn xóa spa này? Hành động này không thể hoàn tác.',
             [
-                {
-                    text: 'Hủy',
-                    style: 'cancel',
-                },
+                { text: 'Hủy', style: 'cancel' },
                 {
                     text: 'Xóa',
                     style: 'destructive',
@@ -129,20 +131,35 @@ export default function SpaDetailScreen() {
         );
     };
 
-    if (loadingState === 'navigating') {
-        return (
-            <SafeAreaView style={styles.container}>
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={Colors.pink} />
-                    <Text style={styles.loadingText}>Đang tải form chỉnh sửa...</Text>
-                </View>
-            </SafeAreaView>
-        );
-    }
+    const handleBack = () => {
+        router.navigate({
+            pathname: '/owner/spaList',
+            params: { resetNavigating: 'true' },
+        });
+    };
+
+    const openImageModal = (uri) => {
+        setSelectedImage(uri);
+        setModalVisible(true);
+    };
+
+    const closeImageModal = () => {
+        setModalVisible(false);
+        setSelectedImage(null);
+    };
 
     if (loadingState === 'initial') {
         return (
             <SafeAreaView style={styles.container}>
+                {Platform.OS !== 'web' && (
+                    <StatusBar backgroundColor={Colors.pink} barStyle="light-content" />
+                )}
+                <View style={styles.headerContainer}>
+                    <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+                        <Ionicons name="arrow-back" size={28} color="#fff" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Thông tin Spa</Text>
+                </View>
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={Colors.pink} />
                     <Text style={styles.loadingText}>Đang tải thông tin spa...</Text>
@@ -151,11 +168,34 @@ export default function SpaDetailScreen() {
         );
     }
 
+    if (loadingState === 'navigating') {
+        return (
+            <SafeAreaView style={styles.container}>
+                {Platform.OS !== 'web' && (
+                    <StatusBar backgroundColor={Colors.pink} barStyle="light-content" />
+                )}
+                <View style={styles.headerContainer}>
+                    <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+                        <Ionicons name="arrow-back" size={28} color="#fff" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Thông tin Spa</Text>
+                </View>
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={Colors.pink} />
+                    <Text style={styles.loadingText}>Đang tải form chỉnh sửa...</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
     if (!spaData) {
         return (
             <SafeAreaView style={styles.container}>
+                {Platform.OS !== 'web' && (
+                    <StatusBar backgroundColor={Colors.pink} barStyle="light-content" />
+                )}
                 <View style={styles.headerContainer}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                    <TouchableOpacity onPress={handleBack} style={styles.backButton}>
                         <Ionicons name="arrow-back" size={28} color="#fff" />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Thông tin Spa</Text>
@@ -175,62 +215,81 @@ export default function SpaDetailScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
+            {Platform.OS !== 'web' && (
+                <StatusBar backgroundColor={Colors.pink} barStyle="light-content" />
+            )}
             <View style={styles.headerContainer}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <TouchableOpacity onPress={handleBack} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={28} color="#fff" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Thông tin Spa</Text>
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContainer}>
-                <Text style={styles.spaTitle}>{spaData.name}</Text>
+            <View style={styles.contentContainer}>
+                <ScrollView contentContainerStyle={styles.scrollContainer}>
+                    <Text style={styles.spaTitle}>{spaData.name}</Text>
 
-                {spaData.images && spaData.images.length > 0 && (
-                    <View style={styles.imageContainer}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                            {spaData.images.map((uri, index) => (
-                                <Image
-                                    key={`${uri}-${index}`}
-                                    source={{ uri }}
-                                    style={styles.spaImage}
-                                    onError={() => console.log(`Failed to load spa image: ${uri}`)}
-                                />
+                    {spaData.images && spaData.images.length > 0 && (
+                        <View style={styles.imageContainer}>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                {spaData.images.map((uri, index) => (
+                                    <TouchableOpacity
+                                        key={`${uri}-${index}`}
+                                        onPress={() => openImageModal(uri)}
+                                    >
+                                        <Image
+                                            source={{ uri }}
+                                            style={styles.spaImage}
+                                            onError={() => console.log(`Failed to load spa image: ${uri}`)}
+                                        />
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
+                    )}
+
+                    <Text style={styles.sectionTitle}>Thông tin chi tiết</Text>
+                    <View style={styles.infoContainer}>
+                        <View style={styles.infoRow}>
+                            <Ionicons name="location-outline" size={20} color={Colors.pink} />
+                            <Text style={styles.infoText}>{spaData.address}</Text>
+                        </View>
+                        <View style={styles.infoRow}>
+                            <Ionicons name="call-outline" size={20} color={Colors.pink} />
+                            <Text style={styles.infoText}>{spaData.phone}</Text>
+                        </View>
+                        <View style={styles.infoRow}>
+                            <Ionicons name="time-outline" size={20} color={Colors.pink} />
+                            <Text style={styles.infoText}>
+                                {spaData.openTime && spaData.closeTime
+                                    ? `${new Date(spaData.openTime).toLocaleTimeString('vi-VN', {
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                      })} - ${new Date(spaData.closeTime).toLocaleTimeString('vi-VN', {
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                      })}`
+                                    : 'N/A'}
+                            </Text>
+                        </View>
+                    </View>
+
+                    <Text style={styles.sectionTitle}>Dịch vụ</Text>
+                    <View style={styles.servicesContainer}>
+                        {Object.entries(spaData.services || {})
+                            .filter(([_, value]) => value)
+                            .map(([key]) => (
+                                <View key={key} style={styles.serviceItem}>
+                                    <Text style={styles.serviceText}>{key}</Text>
+                                </View>
                             ))}
-                        </ScrollView>
                     </View>
-                )}
 
-                <Text style={styles.sectionTitle}>Thông tin chi tiết</Text>
-                <View style={styles.infoContainer}>
-                    <View style={styles.infoRow}>
-                        <Ionicons name="location-outline" size={20} color={Colors.pink} />
-                        <Text style={styles.infoText}>{spaData.address}</Text>
-                    </View>
-                    <View style={styles.infoRow}>
-                        <Ionicons name="call-outline" size={20} color={Colors.pink} />
-                        <Text style={styles.infoText}>{spaData.phone}</Text>
-                    </View>
-                    <View style={styles.infoRow}>
-                        <Ionicons name="time-outline" size={20} color={Colors.pink} />
-                        <Text style={styles.infoText}>{spaData.hours}</Text>
-                    </View>
-                </View>
+                    <Text style={styles.sectionTitle}>Mô tả</Text>
+                    <Text style={styles.descriptionText}>{spaData.description}</Text>
+                </ScrollView>
 
-                <Text style={styles.sectionTitle}>Dịch vụ</Text>
-                <View style={styles.servicesContainer}>
-                    {Object.entries(spaData.services || {})
-                        .filter(([_, value]) => value)
-                        .map(([key]) => (
-                            <View key={key} style={styles.serviceItem}>
-                                <Text style={styles.serviceText}>{key}</Text>
-                            </View>
-                        ))}
-                </View>
-
-                <Text style={styles.sectionTitle}>Mô tả</Text>
-                <Text style={styles.descriptionText}>{spaData.description}</Text>
-
-                <View style={styles.buttonContainer}>
+                <View style={styles.fixedButtonContainer}>
                     <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
                         <Text style={styles.buttonText}>Chỉnh sửa</Text>
                     </TouchableOpacity>
@@ -238,7 +297,31 @@ export default function SpaDetailScreen() {
                         <Text style={styles.buttonText}>Xóa</Text>
                     </TouchableOpacity>
                 </View>
-            </ScrollView>
+            </View>
+
+            <Modal
+                visible={modalVisible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={closeImageModal}
+            >
+                <View style={styles.modalContainer}>
+                    <TouchableOpacity
+                        style={styles.closeButton}
+                        onPress={closeImageModal}
+                    >
+                        <Ionicons name="close" size={30} color="#fff" />
+                    </TouchableOpacity>
+                    {selectedImage && (
+                        <Image
+                            source={{ uri: selectedImage }}
+                            style={styles.fullImage}
+                            resizeMode="contain"
+                            onError={() => console.log(`Failed to load full image: ${selectedImage}`)}
+                        />
+                    )}
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -254,10 +337,7 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.pink,
         height: HEADER_HEIGHT,
         paddingHorizontal: 15,
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
+        // paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0,
         zIndex: 10,
     },
     backButton: {
@@ -268,10 +348,13 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontWeight: 'bold',
     },
+    contentContainer: {
+        flex: 1,
+    },
     scrollContainer: {
         paddingHorizontal: 15,
-        paddingTop: HEADER_HEIGHT + 10,
-        paddingBottom: 30,
+        paddingTop: 15,
+        paddingBottom: 100, // Space for fixed buttons
     },
     spaTitle: {
         fontSize: 24,
@@ -314,13 +397,15 @@ const styles = StyleSheet.create({
     servicesContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 10,
+        marginBottom: 10,
     },
     serviceItem: {
         backgroundColor: '#FFE4E1',
         borderRadius: 8,
         padding: 10,
         width: '48%',
+        marginRight: '2%',
+        marginBottom: 10,
     },
     serviceText: {
         fontSize: 16,
@@ -331,10 +416,18 @@ const styles = StyleSheet.create({
         color: '#333',
         lineHeight: 24,
     },
-    buttonContainer: {
+    fixedButtonContainer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginTop: 20,
+        padding: 15,
+        backgroundColor: '#fff',
+        borderTopWidth: 1,
+        borderTopColor: '#eee',
+        zIndex: 5,
     },
     editButton: {
         backgroundColor: Colors.pink,
@@ -383,11 +476,28 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+        paddingTop: HEADER_HEIGHT + (Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0),
     },
     loadingText: {
         fontSize: 18,
         color: '#333',
         marginTop: 10,
         textAlign: 'center',
+    },
+    modalContainer: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    fullImage: {
+        width: SCREEN_WIDTH * 0.9,
+        height: SCREEN_HEIGHT * 0.7,
+    },
+    closeButton: {
+        position: 'absolute',
+        top: 40,
+        right: 20,
+        zIndex: 10,
     },
 });
