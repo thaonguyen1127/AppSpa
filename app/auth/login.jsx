@@ -86,7 +86,7 @@ const LoginScreen = () => {
       // Lưu thông tin nếu chọn "Lưu mật khẩu"
       await saveCredentials();
 
-      const userDocRef = doc(db, 'user', user.uid);
+      const userDocRef = doc(db, 'users', user.uid);
       const userDoc = await getDoc(userDocRef);
 
       const userData = userDoc.data();
@@ -145,7 +145,7 @@ const LoginScreen = () => {
       const user = userCredential.user;
 
       // Kiểm tra thông tin người dùng trong Firestore
-      const userDocRef = doc(db, 'user', user.uid);
+      const userDocRef = doc(db, 'users', user.uid);
       const userDoc = await getDoc(userDocRef);
 
       let role = 'user'; // Mặc định là user

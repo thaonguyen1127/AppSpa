@@ -10,14 +10,21 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.spa"
+      "bundleIdentifier": "com.spa",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Ứng dụng cần truy cập vị trí của bạn để tìm các spa gần nhất."
+      }
     },
     "android": {
       "package": "com.spa",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -38,7 +45,14 @@
       [
         "expo-image-picker",
         {
-          "locationForegroundPermission": "Ứng dụng cần truy cập vị trí để lấy địa chỉ spa."
+          "cameraPermission": "Ứng dụng cần quyền truy cập máy ảnh để chụp ảnh.",
+          "photosPermission": "Ứng dụng cần quyền truy cập thư viện ảnh để chọn ảnh."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Cho phép ứng dụng truy cập vị trí để tìm các spa gần bạn."
         }
       ]
     ],
@@ -53,6 +67,5 @@
         "projectId": "fcf4e040-e6cc-4af4-8b2d-f89f3ed89788"
       }
     }
-    
   }
 }

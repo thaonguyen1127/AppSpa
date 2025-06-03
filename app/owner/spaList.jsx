@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
     },
     loadingOverlay: {
         position: 'absolute',
-        top: HEADER_HEIGHT + (Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0),
+        top: 0,
         bottom: 0,
         left: 0,
         right: 0,

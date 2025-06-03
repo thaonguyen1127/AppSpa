@@ -104,7 +104,7 @@ const SignUpScreen = () => {
       const user = userCredential.user;
       const role = isOwner ? 'owner' : 'user';
 
-      await setDoc(doc(db, 'user', user.uid), {
+      await setDoc(doc(db, 'users', user.uid), {
         uid: user.uid,
         fullName: trimmedFullName,
         email: trimmedEmail,
@@ -115,7 +115,7 @@ const SignUpScreen = () => {
       alert('Đăng ký thành công!');
       navigation.navigate('auth/login');
     } catch (error) {
-      console.log('Lỗi đăng ký:', error.message);
+      // console.log('Lỗi đăng ký:', error.message);
       alert('Đăng ký thất bại: ' + error.message);
     }
   };

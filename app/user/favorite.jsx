@@ -8,6 +8,7 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Image,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -37,7 +38,7 @@ const favoriteSpas = [
     rating: 4.7,
     avatar: 'https://images.pexels.com/photos/3757954/pexels-photo-3757954.jpeg?auto=compress&cs=tinysrgb&w=50&h=50',
   },
-   {
+  {
     id: '4',
     name: 'Jasmine Spa',
     service: 'Gội đầu dưỡng sinh',
@@ -71,23 +72,21 @@ const FavoriteScreen = () => {
     navigation.navigate('screen/spaDetail', { spa });
   };
 
-  const HEADER_HEIGHT = 50; 
+  const HEADER_HEIGHT = 50;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <StatusBar
-        backgroundColor={Colors.pink}
-        barStyle="light-content"
-        translucent={false}
+        backgroundColor="transparent"
+        barStyle="dark-content"
+        translucent={true}
       />
       <LinearGradient
-        colors={[Colors.pink, `${Colors.pink}`, '#fff']}
+        colors={[Colors.pink, Colors.pink, '#fff']}
         style={styles.gradientBackground}
       >
         <View style={styles.headerContainer}>
-          <View
-            style={[styles.header, { height: HEADER_HEIGHT }]}
-          >
+          <View style={[styles.header, { height: HEADER_HEIGHT }]}>
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
               <Icon name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
@@ -97,7 +96,7 @@ const FavoriteScreen = () => {
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT }]}
+          contentContainerStyle={styles.scrollViewContent}
         >
           {favoriteSpas.length === 0 ? (
             <Text style={styles.emptyText}>Chưa có spa yêu thích nào</Text>
@@ -140,25 +139,26 @@ const FavoriteScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#fff',
   },
   gradientBackground: {
     flex: 1,
   },
-  headerContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 100,
-    backgroundColor: `${Colors.pink}`
-
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-  },
+ headerContainer: {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  zIndex: 10,
+  paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0,
+  backgroundColor: Colors.pink,
+},
+header: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingHorizontal: 15,
+  paddingVertical: 10,
+},
   backButton: {
     marginRight: 10,
   },
@@ -172,6 +172,7 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     paddingHorizontal: 10,
+    paddingTop: 80, 
     paddingBottom: 20,
   },
   spaCard: {

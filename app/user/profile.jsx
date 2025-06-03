@@ -27,7 +27,7 @@ const ProfileScreen = () => {
     address: '123 Đường Hoa Hồng, Quận 1, TP.HCM',
     avatar: 'https://i.pravatar.cc/150?img=3',
   });
-  const HEADER_HEIGHT = 50; // Đồng bộ với Favorite, Notification, BookingHistory, Booking
+  const HEADER_HEIGHT = 50;
 
   const handleEdit = () => setIsEditing(!isEditing);
   const handleChange = (field, value) => {
@@ -47,14 +47,14 @@ const ProfileScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <StatusBar
-        backgroundColor={Colors.pink}
-        barStyle="light-content"
-        translucent={false}
+        backgroundColor="transparent"
+        barStyle="dark-content"
+        translucent={true}
       />
       <LinearGradient
-        colors={[Colors.pink, `${Colors.pink}`, '#fff']}
+        colors={[Colors.pink, Colors.pink, '#fff']}
         style={styles.gradientBackground}
       >
         <View style={styles.headerContainer}>
@@ -68,7 +68,7 @@ const ProfileScreen = () => {
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT }]}
+          contentContainerStyle={styles.scrollViewContent}
         >
           <View style={styles.userInfo}>
             <Image
@@ -134,6 +134,7 @@ const ProfileScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#fff',
   },
   gradientBackground: {
     flex: 1,
@@ -144,7 +145,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    backgroundColor: Colors.pink
+    paddingTop: StatusBar.currentHeight || 0,
+    backgroundColor: Colors.pink,
   },
   header: {
     flexDirection: 'row',
@@ -165,6 +167,7 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     paddingHorizontal: 15,
+    paddingTop: 80, // Đủ để nội dung không bị header che
     paddingBottom: 20,
   },
   userInfo: {

@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StatusBar,
   SafeAreaView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -50,12 +51,11 @@ const notifications = [
     message: 'Ứng dụng sẽ bảo trì từ 00:00 đến 02:00 ngày 17/04.',
     time: '2 ngày trước',
   },
-  
 ];
 
 const NotificationScreen = () => {
   const router = useRouter();
-  const HEADER_HEIGHT = 50; // Đồng bộ với Favorite, Home, Search
+  const HEADER_HEIGHT = 50;
 
   const renderItem = ({ item }) => (
     <View style={styles.notificationItem}>
@@ -63,32 +63,36 @@ const NotificationScreen = () => {
         name="notifications-outline"
         size={24}
         color={Colors.pink}
-        style={styles.icon}
+        style={styles.notificationIcon}
       />
       <View style={styles.textContainer}>
-        <Text style={styles.title}>{item.title}</Text>
-        <Text style={styles.message}>{item.message}</Text>
-        <Text style={styles.time}>{item.time}</Text>
+        <Text style={styles.notificationTitle}>{item.title}</Text>
+        <Text style={styles.notificationMessage} numberOfLines={2} ellipsizeMode="tail">
+          {item.message}
+        </Text>
+        <Text style={styles.notificationTime}>{item.time}</Text>
       </View>
     </View>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <StatusBar
-        backgroundColor={Colors.pink}
-        barStyle="light-content"
-        translucent={false}
+        backgroundColor="transparent"
+        barStyle="dark-content"
+        translucent={true}
       />
       <LinearGradient
-        colors={[Colors.pink, `${Colors.pink}`, '#fff']}
+        colors={[Colors.pink, Colors.pink, '#fff']}
         style={styles.gradientBackground}
       >
         <View style={styles.headerContainer}>
-          <View
-            style={[styles.header, { height: HEADER_HEIGHT}]}
-          >
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <View style={[styles.header, { height: HEADER_HEIGHT }]}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+              accessibilityLabel="Quay lại"
+            >
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Thông báo</Text>
@@ -99,7 +103,7 @@ const NotificationScreen = () => {
           data={notifications}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          contentContainerStyle={[styles.listContent, { paddingTop: HEADER_HEIGHT }]}
+          contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <Text style={styles.emptyText}>Chưa có thông báo nào</Text>
           }
@@ -112,6 +116,7 @@ const NotificationScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#fff',
   },
   gradientBackground: {
     flex: 1,
@@ -122,7 +127,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    backgroundColor: Colors.pink
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0,
+    backgroundColor: Colors.pink,
   },
   header: {
     flexDirection: 'row',
@@ -140,6 +146,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 10,
+    paddingTop: 80, // Đủ để nội dung không bị header che
     paddingBottom: 20,
   },
   notificationItem: {
@@ -154,24 +161,25 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  icon: {
+  notificationIcon: {
     marginRight: 12,
     marginTop: 4,
   },
   textContainer: {
     flex: 1,
+    flexShrink: 1,
   },
-  title: {
+  notificationTitle: {
     fontWeight: 'bold',
     fontSize: 16,
     color: Colors.pink,
     marginBottom: 2,
   },
-  message: {
+  notificationMessage: {
     fontSize: 14,
     color: '#333',
   },
-  time: {
+  notificationTime: {
     marginTop: 4,
     fontSize: 12,
     color: '#999',

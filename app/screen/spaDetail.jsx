@@ -1,365 +1,480 @@
-import React, { useState, useRef, useEffect } from 'react';
+"use client"
+
+import React, { useState, useEffect, useRef, useContext } from "react"
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
-  StatusBar,
-  SafeAreaView,
   TouchableOpacity,
   Image,
-  Dimensions,
-  TextInput,
-  ActivityIndicator,
-  FlatList,
-} from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
-import { Colors } from '@/constants/Colors';
-import { useNavigation, useRoute } from '@react-navigation/native';
+  StatusBar,
+  Linking,
+  Alert,
+  Modal,
+} from "react-native"
+import { SafeAreaView } from "react-native-safe-area-context"
+import { Ionicons } from "@expo/vector-icons"
+import MapView, { Marker } from "react-native-maps"
+import { useRouter, useLocalSearchParams } from "expo-router"
+import ShimmerPlaceholder from "react-native-shimmer-placeholder"
+import { LinearGradient } from "expo-linear-gradient"
+import { SpaContext } from "../../src/context/SpaContext"
+import styles from "../../src/styles/SpaDetailStyles"
 
-const { width } = Dimensions.get('window');
+// Singleton to store cached map region
+let cachedRegion = null
 
-const SpaDetailScreen = () => {
-  const navigation = useNavigation();
-  const route = useRoute();
-  const { spa } = route.params;
-  const [comment, setComment] = useState('');
-  const [isFavorite, setIsFavorite] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeSlide, setActiveSlide] = useState(0);
-  const flatListRef = useRef(null);
+const tabs = [
+  { id: "overview", title: "Tổng quan", icon: "information-circle-outline" },
+  { id: "reviews", title: "Đánh giá", icon: "star-outline" },
+  { id: "location", title: "Vị trí", icon: "location-outline" },
+]
 
-  const spaData = {
-    ...spa,
-    images: [
-      'https://images.pexels.com/photos/3757954/pexels-photo-3757954.jpeg?auto=compress&cs=tinysrgb&w=800',
-      'https://images.pexels.com/photos/3757952/pexels-photo-3757952.jpeg?auto=compress&cs=tinysrgb&w=800',
-      'https://images.pexels.com/photos/3757957/pexels-photo-3757957.jpeg?auto=compress&cs=tinysrgb&w=800',
-    ],
-    address: '123 Đường Láng, Đống Đa, Hà Nội',
-    phone: '0123 456 789',
-    openingHours: '9:00 - 21:00',
-    description:
-      'Chào mừng bạn đến với spa của sự thư giãn! Chúng tôi cung cấp các dịch vụ massage, chăm sóc da mặt và gội đầu dưỡng sinh với đội ngũ chuyên nghiệp, không gian ấm cúng.',
-  };
+export default function SpaDetailScreen() {
+  const router = useRouter()
+  const { id } = useLocalSearchParams()
+  const { spaCache, reviewsCache, fetchSpaData } = useContext(SpaContext)
+  const [spa, setSpa] = useState(null)
+  const [reviews, setReviews] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState("overview")
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [isFavorite, setIsFavorite] = useState(false)
+  const [mapModalVisible, setMapModalVisible] = useState(false)
+  const [fullImageVisible, setFullImageVisible] = useState(false)
+  const [selectedImage, setSelectedImage] = useState(null)
+  const scrollViewRef = useRef(null)
 
+  // Auto-scroll slider
   useEffect(() => {
+    if (!spa || !spa.images || spa.images.length <= 1) return
     const interval = setInterval(() => {
-      setActiveSlide((prev) => {
-        const nextSlide = (prev + 1) % spaData.images.length;
-        flatListRef.current?.scrollToIndex({
-          index: nextSlide,
+      setCurrentImageIndex((prevIndex) => {
+        const nextIndex = (prevIndex + 1) % spa.images.length
+        scrollViewRef.current?.scrollTo({
+          x: nextIndex * styles.sliderImage.width,
           animated: true,
-        });
-        return nextSlide;
-      });
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [spaData.images.length]);
+        })
+        return nextIndex
+      })
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [spa])
 
-  const handleBack = () => {
-    navigation.goBack();
-  };
-
-  const handleToggleFavorite = () => {
-    setIsFavorite(!isFavorite);
-    console.log(`Spa ${spa.name} ${isFavorite ? 'bỏ yêu thích' : 'thêm yêu thích'}`);
-  };
-
-  const handleSendComment = () => {
-    if (comment.trim()) {
-      console.log('Bình luận:', comment);
-      setComment('');
+  // Fetch spa data from context
+  useEffect(() => {
+    const loadSpaData = async () => {
+      setIsLoading(true)
+      if (spaCache[id] && reviewsCache[id]) {
+        setSpa(spaCache[id])
+        setReviews(reviewsCache[id])
+        // Set cached region if not already set
+        if (!cachedRegion && spaCache[id].coordinates) {
+          cachedRegion = {
+            latitude: Number(spaCache[id].coordinates.latitude),
+            longitude: Number(spaCache[id].coordinates.longitude),
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }
+        }
+      } else {
+        const { spa, reviews } = await fetchSpaData(id)
+        setSpa(spa)
+        setReviews(reviews)
+        // Set cached region for new data
+        if (spa && spa.coordinates && !cachedRegion) {
+          cachedRegion = {
+            latitude: Number(spa.coordinates.latitude),
+            longitude: Number(spa.coordinates.longitude),
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }
+        }
+      }
+      setIsLoading(false)
     }
-  };
 
-  const handleBookNow = () => {
-    navigation.navigate('screen/booking', { spa: spaData });
-  };
+    if (id) {
+      loadSpaData()
+    }
+  }, [id, spaCache, reviewsCache, fetchSpaData])
 
-  const renderCarouselItem = ({ item, index }) => (
-    <View style={styles.carouselItem}>
-      {isLoading && (
-        <ActivityIndicator size="large" color={Colors.pink} style={styles.loader} />
-      )}
-      <Image
-        key={`carousel-image-${index}`}
-        source={{ uri: item }}
-        style={styles.spaImage}
-        resizeMode="cover"
-        onLoad={() => setIsLoading(false)}
-        onError={(e) => {
-          console.log(`Failed to load image ${item}:`, e.nativeEvent.error);
-          setIsLoading(false);
-        }}
-        defaultSource={{ uri: 'https://via.placeholder.com/800x400/CCCCCC/FFFFFF?text=Spa' }}
+  const handleImageScroll = (event) => {
+    const slideSize = event.nativeEvent.layoutMeasurement.width
+    const index = Math.floor(event.nativeEvent.contentOffset.x / slideSize)
+    setCurrentImageIndex(index)
+  }
+
+  const openGoogleMaps = () => {
+    if (!spa) return
+    const { latitude, longitude } = spa.coordinates
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`
+    Linking.openURL(url).catch(() => {
+      Alert.alert("Lỗi", "Không thể mở Google Maps")
+    })
+  }
+
+  const callPhone = () => {
+    if (!spa || !spa.phone || spa.phone === "N/A") return
+    Linking.openURL(`tel:${spa.phone}`)
+  }
+
+  const renderStars = (rating) => {
+    const stars = []
+    for (let i = 1; i <= 5; i++) {
+      stars.push(<Ionicons key={i} name={i <= rating ? "star" : "star-outline"} size={16} color={styles.ratingNumber.color} />)
+    }
+    return stars
+  }
+
+  const handleImagePress = (image) => {
+    setSelectedImage(image)
+    setFullImageVisible(true)
+  }
+
+  // Skeleton Loader
+  const SkeletonLoader = () => (
+    <View style={styles.container}>
+      <ShimmerPlaceholder
+        LinearGradient={LinearGradient}
+        style={styles.skeletonImage}
+        shimmerColors={["#e0e0e0", "#f5f5f5", "#e0e0e0"]}
       />
+      <View style={styles.spaInfo}>
+        <ShimmerPlaceholder
+          LinearGradient={LinearGradient}
+          style={styles.skeletonTitle}
+          shimmerColors={["#e0e0e0", "#f5f5f5", "#e0e0e0"]}
+        />
+        <ShimmerPlaceholder
+          LinearGradient={LinearGradient}
+          style={styles.skeletonRating}
+          shimmerColors={["#e0e0e0", "#f5f5f5", "#e0e0e0"]}
+        />
+      </View>
+      <View style={styles.tabsContainer}>
+        {tabs.map((tab) => (
+          <ShimmerPlaceholder
+            key={tab.id}
+            LinearGradient={LinearGradient}
+            style={styles.skeletonTab}
+            shimmerColors={["#e0e0e0", "#f5f5f5", "#e0e0e0"]}
+          />
+        ))}
+      </View>
+      <View style={styles.tabContent}>
+        <ShimmerPlaceholder
+          LinearGradient={LinearGradient}
+          style={styles.skeletonSection}
+          shimmerColors={["#e0e0e0", "#f5f5f5", "#e0e0e0"]}
+        />
+        {activeTab === "location" && (
+          <ShimmerPlaceholder
+            LinearGradient={LinearGradient}
+            style={styles.skeletonMap}
+            shimmerColors={["#e0e0e0", "#f5f5f5", "#e0e0e0"]}
+          />
+        )}
+      </View>
     </View>
-  );
+  )
 
-  const handleScroll = (event) => {
-    const slideWidth = width;
-    const index = Math.round(event.nativeEvent.contentOffset.x / slideWidth);
-    setActiveSlide(index);
-  };
+  const renderOverviewTab = () => (
+    <View style={styles.tabContent}>
+      <View style={styles.infoSection}>
+        <Text style={styles.sectionTitle}>Thông tin cơ bản</Text>
+        <View style={styles.infoRow}>
+          <Ionicons name="location" size={20} color={styles.directionButton.backgroundColor} />
+          <Text style={styles.infoText}>{spa.address}</Text>
+        </View>
+        <TouchableOpacity style={styles.infoRow} onPress={callPhone}>
+          <Ionicons name="call" size={20} color={styles.directionButton.backgroundColor} />
+          <Text style={[styles.infoText, styles.phoneText]}>{spa.phone}</Text>
+        </TouchableOpacity>
+        <View style={styles.infoRow}>
+          <Ionicons name="time" size={20} color={styles.directionButton.backgroundColor} />
+          <Text style={styles.infoText}>
+            {spa.openTime} - {spa.closeTime}
+          </Text>
+          <View style={styles.statusBadge}>
+            <Text style={styles.statusText}>Đang mở</Text>
+          </View>
+        </View>
+      </View>
+      <View style={styles.infoSection}>
+        <Text style={styles.sectionTitle}>Giới thiệu</Text>
+        <Text style={styles.descriptionText}>{spa.description}</Text>
+      </View>
+      <View style={styles.infoSection}>
+        <Text style={styles.sectionTitle}>Dịch vụ</Text>
+        <View style={styles.servicesContainer}>
+          {spa.services.map((service, index) => (
+            <View key={index} style={styles.serviceTag}>
+              <Text style={styles.serviceText}>{service}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </View>
+  )
+
+  const renderReviewsTab = () => (
+    <View style={styles.tabContent}>
+      <View style={styles.reviewSummary}>
+        <View style={styles.ratingContainer}>
+          <Text style={styles.ratingNumber}>{spa.rating ? spa.rating.toFixed(1) : "Chưa có"}</Text>
+          <View style={styles.starsContainer}>{renderStars(Math.floor(spa.rating || 0))}</View>
+          <Text style={styles.reviewCount}>({spa.reviewCount || 0} đánh giá)</Text>
+        </View>
+      </View>
+      {reviews.length === 0 ? (
+        <Text style={styles.noReviewsText}>Chưa có đánh giá nào</Text>
+      ) : (
+        reviews.map((review) => (
+          <View key={review.id} style={styles.reviewItem}>
+            <View style={styles.reviewHeader}>
+              <Image source={{ uri: review.avatar }} style={styles.avatar} />
+              <View style={styles.reviewInfo}>
+                <Text style={styles.userName}>{review.userName}</Text>
+                <View style={styles.reviewRating}>
+                  {renderStars(review.rating)}
+                  <Text style={styles.reviewDate}>{review.date}</Text>
+                </View>
+              </View>
+            </View>
+            <Text style={styles.reviewComment}>{review.comment}</Text>
+          </View>
+        ))
+      )}
+    </View>
+  )
+
+  const renderLocationTab = () => {
+    if (!spa || !spa.coordinates || !spa.coordinates.latitude || !spa.coordinates.longitude) {
+      return (
+        <View style={styles.tabContent}>
+          <Text style={styles.errorText}>Không có thông tin vị trí.</Text>
+        </View>
+      )
+    }
+
+    const region = cachedRegion || {
+      latitude: Number(spa.coordinates.latitude),
+      longitude: Number(spa.coordinates.longitude),
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    }
+
+    return (
+      <View style={styles.tabContent}>
+        <View style={styles.locationSection}>
+          <Text style={styles.sectionTitle}>Vị trí trên bản đồ</Text>
+          <Text style={styles.addressText}>{spa.address}</Text>
+          <TouchableOpacity style={styles.mapContainer} onPress={() => setMapModalVisible(true)}>
+            <MapView
+              style={styles.map}
+              initialRegion={region}
+              region={region}
+              scrollEnabled={false}
+              zoomEnabled={false}
+              pitchEnabled={false}
+              rotateEnabled={false}
+              loadingEnabled={true}
+              loadingIndicatorColor={styles.directionButton.backgroundColor}
+              loadingBackgroundColor={styles.container.backgroundColor}
+            >
+              <Marker
+                coordinate={{ latitude: region.latitude, longitude: region.longitude }}
+                title={spa.name}
+                description={spa.address}
+              />
+            </MapView>
+          </TouchableOpacity>
+          <View style={styles.mapActions}>
+            <TouchableOpacity style={styles.directionButton} onPress={openGoogleMaps}>
+              <Ionicons name="navigate" size={20} color={styles.directionText.color} />
+              <Text style={styles.directionText}>Chỉ đường</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.callButton} onPress={callPhone}>
+              <Ionicons name="call" size={20} color={styles.callButtonText.color} />
+              <Text style={styles.callButtonText}>Gọi điện</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    )
+  }
+
+  if (isLoading) {
+    return <SkeletonLoader />
+  }
+
+  if (!spa) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Không tìm thấy thông tin spa!</Text>
+          <TouchableOpacity style={styles.backButtonError} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Quay lại</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    )
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar backgroundColor="transparent" translucent barStyle="light-content" />
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollViewContent}
-        contentInsetAdjustmentBehavior="never"
-      >
-        <View style={styles.sliderContainer}>
-          <FlatList
-            ref={flatListRef}
-            data={spaData.images}
-            renderItem={renderCarouselItem}
+      <StatusBar backgroundColor="transparent" barStyle="dark-content" translucent />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={24} color={styles.backButtonText.color} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.favoriteButton} onPress={() => setIsFavorite(!isFavorite)}>
+          <Ionicons
+            name={isFavorite ? "heart" : "heart-outline"}
+            size={24}
+            color={isFavorite ? styles.directionButton.backgroundColor : styles.backButtonText.color}
+          />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.scrollView}>
+        {/* Image Slider */}
+        <View style={styles.imageSliderContainer}>
+          <ScrollView
+            ref={scrollViewRef}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
-            keyExtractor={(item, index) => `carousel-${index}`}
-            onScroll={handleScroll}
+            onScroll={handleImageScroll}
             scrollEventThrottle={16}
-            getItemLayout={(data, index) => ({
-              length: width,
-              offset: width * index,
-              index,
-            })}
-            style={styles.carousel}
-          />
-          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <Icon name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.spaHeader}>
-          <Image
-            source={{ uri: spa.avatar }}
-            style={styles.spaAvatar}
-            defaultSource={{ uri: 'https://via.placeholder.com/50/CCCCCC/FFFFFF?text=Spa' }}
-            onError={() => console.log(`Failed to load avatar for ${spa.name}`)}
-          />
-          <View style={styles.spaNameContainer}>
-            <Text style={styles.spaName}>{spa.name}</Text>
-            <TouchableOpacity onPress={handleToggleFavorite} style={styles.favoriteButton}>
-              <Icon
-                name={isFavorite ? 'heart' : 'heart-outline'}
-                size={24}
-                color={isFavorite ? Colors.pink : '#666'}
+          >
+            {spa.images.map((image, index) => (
+              <TouchableOpacity key={index} onPress={() => handleImagePress(image)}>
+                <Image source={{ uri: image }} style={styles.sliderImage} />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <View style={styles.imageIndicators}>
+            {spa.images.map((_, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[styles.indicator, currentImageIndex === index && styles.activeIndicator]}
+                onPress={() => {
+                  scrollViewRef.current?.scrollTo({
+                    x: index * styles.sliderImage.width,
+                    animated: true,
+                  })
+                  setCurrentImageIndex(index)
+                }}
               />
+            ))}
+          </View>
+        </View>
+
+        {/* Spa Info */}
+        <View style={styles.spaInfo}>
+          <Text style={styles.spaName}>{spa.name}</Text>
+          <View style={styles.ratingRow}>
+            <View style={styles.starsContainer}>{renderStars(Math.floor(spa.rating || 0))}</View>
+            <Text style={styles.ratingText}>{spa.rating ? spa.rating.toFixed(1) : "Chưa có"}</Text>
+            <Text style={styles.reviewCountText}>({spa.reviewCount || 0} đánh giá)</Text>
+          </View>
+        </View>
+
+        {/* Tabs */}
+        <View style={styles.tabsContainer}>
+          {tabs.map((tab) => (
+            <TouchableOpacity
+              key={tab.id}
+              style={[styles.tab, activeTab === tab.id && styles.activeTab]}
+              onPress={() => setActiveTab(tab.id)}
+            >
+              <Ionicons name={tab.icon} size={20} color={activeTab === tab.id ? styles.directionButton.backgroundColor : styles.reviewCountText.color} />
+              <Text style={[styles.tabText, activeTab === tab.id && styles.activeTabText]}>{tab.title}</Text>
             </TouchableOpacity>
-          </View>
+          ))}
         </View>
 
-        <View style={styles.infoContainer}>
-          <View style={styles.infoRow}>
-            <Icon name="location" size={20} color={Colors.pink} />
-            <Text style={styles.infoText}>Địa chỉ: {spaData.address}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Icon name="call" size={20} color={Colors.pink} />
-            <Text style={styles.infoText}>Số điện thoại: {spaData.phone}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Icon name="star" size={20} color="#FFD700" />
-            <Text style={styles.infoText}>Đánh giá: {spa.rating}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Icon name="time" size={20} color={Colors.pink} />
-            <Text style={styles.infoText}>Giờ mở cửa: {spaData.openingHours}</Text>
-          </View>
-        </View>
-
-        <View style={styles.descriptionContainer}>
-          <Text style={styles.sectionTitle}>Giới thiệu</Text>
-          <Text style={styles.descriptionText}>{spaData.description}</Text>
-        </View>
-
-        <View style={styles.commentContainer}>
-          <Text style={styles.sectionTitle}>Bình luận</Text>
-          <View style={styles.commentInputContainer}>
-            <Image
-              source={{ uri: 'https://via.placeholder.com/40/CCCCCC/FFFFFF?text=User' }}
-              style={styles.userAvatar}
-            />
-            <TextInput
-              style={styles.commentInput}
-              placeholder="Viết bình luận của bạn..."
-              value={comment}
-              onChangeText={setComment}
-              multiline
-            />
-            <TouchableOpacity onPress={handleSendComment} style={styles.favoriteButton}>
-              <Icon name="send" size={24} color={Colors.pink} />
-            </TouchableOpacity>
-          </View>
-        </View>
+        {/* Tab Content */}
+        {activeTab === "overview" && renderOverviewTab()}
+        {activeTab === "reviews" && renderReviewsTab()}
+        {activeTab === "location" && renderLocationTab()}
       </ScrollView>
 
-      {/* Nút Đặt lịch cố định */}
-      <TouchableOpacity style={styles.bookButton} onPress={handleBookNow}>
-        <Text style={styles.bookButtonText}>Đặt lịch ngay</Text>
-      </TouchableOpacity>
+      {/* Full Image Modal */}
+      <Modal visible={fullImageVisible} transparent={true} onRequestClose={() => setFullImageVisible(false)}>
+        <View style={styles.fullImageModal}>
+          <TouchableOpacity style={styles.closeImageButton} onPress={() => setFullImageVisible(false)}>
+            <Ionicons name="close" size={30} color={styles.backButtonText.color} />
+          </TouchableOpacity>
+          {selectedImage && <Image source={{ uri: selectedImage }} style={styles.fullImage} />}
+        </View>
+      </Modal>
+
+      {/* Map Modal */}
+      <Modal
+        animationType="slide"
+        transparent={false}
+        visible={mapModalVisible}
+        onRequestClose={() => setMapModalVisible(false)}
+      >
+        <SafeAreaView style={styles.flex}>
+          {spa.coordinates && spa.coordinates.latitude && spa.coordinates.longitude ? (
+            <MapView
+              style={styles.flex}
+              initialRegion={cachedRegion || {
+                latitude: Number(spa.coordinates.latitude),
+                longitude: Number(spa.coordinates.longitude),
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+              }}
+              region={cachedRegion || {
+                latitude: Number(spa.coordinates.latitude),
+                longitude: Number(spa.coordinates.longitude),
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+              }}
+              loadingEnabled={true}
+              loadingIndicatorColor={styles.directionButton.backgroundColor}
+              loadingBackgroundColor={styles.container.backgroundColor}
+            >
+              <Marker
+                coordinate={{
+                  latitude: Number(spa.coordinates.latitude),
+                  longitude: Number(spa.coordinates.longitude),
+                }}
+                title={spa.name}
+                description={spa.address}
+              />
+            </MapView>
+          ) : (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>Không có thông tin vị trí.</Text>
+            </View>
+          )}
+          <View style={styles.mapButtonContainer}>
+            <TouchableOpacity
+              style={styles.mapButton}
+              onPress={() => setMapModalVisible(false)}
+            >
+              <Text style={styles.mapButtonText}>Đóng</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.mapButton} onPress={openGoogleMaps}>
+              <Text style={styles.mapButtonText}>Chỉ đường</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Bottom Action Button */}
+      <View style={styles.bottomAction}>
+        <TouchableOpacity style={styles.bookButton} onPress={() => router.push(`/user/booking/${spa.id}`)}>
+          <Text style={styles.bookButtonText}>Đặt lịch ngay</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
-  );
-};
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  scrollView: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  scrollViewContent: {
-    paddingBottom: 80, // Tăng paddingBottom để không bị che bởi nút Đặt lịch
-  },
-  sliderContainer: {
-    height: width * 0.6,
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    elevation: 5,
-    backgroundColor: '#fff',
-    overflow: 'visible',
-    borderRadius: 0,
-  },
-  carouselItem: {
-    width: width,
-    height: width * 0.6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'visible',
-    borderRadius: 0,
-  },
-  spaImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-    borderRadius: 0,
-  },
-  loader: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: [{ translateX: -15 }, { translateY: -15 }],
-  },
-  backButton: {
-    position: 'absolute',
-    top: StatusBar.currentHeight ? StatusBar.currentHeight + 10 : 40,
-    left: 15,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    borderRadius: 20,
-    padding: 8,
-  },
-  spaHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 15,
-    backgroundColor: '#fff',
-  },
-  spaAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 10,
-  },
-  spaNameContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  spaName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  favoriteButton: {
-    padding: 5,
-  },
-  infoContainer: {
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    backgroundColor: '#fff',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  infoText: {
-    fontSize: 16,
-    color: '#333',
-    marginLeft: 10,
-  },
-  descriptionContainer: {
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    backgroundColor: '#fff',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 10,
-  },
-  descriptionText: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 24,
-  },
-  commentContainer: {
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    backgroundColor: '#fff',
-  },
-  commentInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 10,
-  },
-  userAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
-  },
-  commentInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-    paddingVertical: 5,
-  },
-  bookButton: {
-    position: 'absolute',
-    bottom: 20,
-    left: 15,
-    right: 15,
-    backgroundColor: Colors.pink,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  bookButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-});
-
-export default SpaDetailScreen;
+  )
+}

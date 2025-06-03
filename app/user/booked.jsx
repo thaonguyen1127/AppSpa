@@ -8,6 +8,7 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Image,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -60,7 +61,7 @@ const bookedSpas = [
 
 const BookingHistoryScreen = () => {
   const navigation = useNavigation();
-  const HEADER_HEIGHT = 50; 
+  const HEADER_HEIGHT = 50;
 
   const groupByMonth = (bookings) => {
     const grouped = bookings.reduce((acc, booking) => {
@@ -99,20 +100,18 @@ const BookingHistoryScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <StatusBar
-        backgroundColor={Colors.pink}
-        barStyle="light-content"
-        translucent={false}
+        backgroundColor="transparent"
+        barStyle="dark-content"
+        translucent={true}
       />
       <LinearGradient
-        colors={[Colors.pink, `${Colors.pink}`, '#fff']}
+        colors={[Colors.pink, Colors.pink, '#fff']}
         style={styles.gradientBackground}
       >
         <View style={styles.headerContainer}>
-          <View
-            style={[styles.header, { height: HEADER_HEIGHT }]}
-          >
+          <View style={[styles.header, { height: HEADER_HEIGHT }]}>
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
               <Icon name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
@@ -122,7 +121,7 @@ const BookingHistoryScreen = () => {
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT }]}
+          contentContainerStyle={styles.scrollViewContent}
         >
           {groupedBookings.length === 0 ? (
             <Text style={styles.emptyText}>Chưa có lịch đặt nào</Text>
@@ -169,29 +168,30 @@ const BookingHistoryScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#fff',
   },
   gradientBackground: {
     flex: 1,
   },
   headerContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    backgroundColor: Colors.pink,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-  },
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  zIndex: 10,
+  paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0,
+  backgroundColor: Colors.pink,
+},
+header: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingHorizontal: 15,
+  paddingVertical: 10,
+},
   backButton: {
     marginRight: 10,
   },
   headerTitle: {
-    // lineHeight: 20,
     fontSize: 20,
     fontWeight: 'bold',
     color: '#fff',
@@ -201,6 +201,7 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     paddingHorizontal: 10,
+    paddingTop: 80, 
     paddingBottom: 20,
   },
   monthBlock: {
