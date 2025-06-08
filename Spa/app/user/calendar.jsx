@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,98 +9,226 @@ import {
   SafeAreaView,
   Platform,
   Modal,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Calendar } from 'react-native-calendars';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../src/firebaseConfig'; 
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Calendar, LocaleConfig } from "react-native-calendars";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { db, auth } from "../../src/firebaseConfig";
+import { Colors } from "@/constants/Colors";
+import moment from "moment-timezone";
+import "moment/locale/vi";
+
+moment.locale("vi");
+
+// Cấu hình locale tiếng Việt
+LocaleConfig.locales["vi"] = {
+  monthNames: [
+    "Tháng 1",
+    "Tháng 2",
+    "Tháng 3",
+    "Tháng 4",
+    "Tháng 5",
+    "Tháng 6",
+    "Tháng 7",
+    "Tháng 8",
+    "Tháng 9",
+    "Tháng 10",
+    "Tháng 11",
+    "Tháng 12",
+  ],
+  monthNamesShort: [
+    "T1",
+    "T2",
+    "T3",
+    "T4",
+    "T5",
+    "T6",
+    "T7",
+    "T8",
+    "T9",
+    "T10",
+    "T11",
+    "T12",
+  ],
+  dayNames: ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"],
+  dayNamesShort: ["CN", "T2", "T3", "T4", "T5", "T6", "T7"],
+};
+LocaleConfig.defaultLocale = "vi";
 
 const CalendarScreen = () => {
   const router = useRouter();
-  const { idSpa } = useLocalSearchParams(); // Lấy idSpa từ tham số điều hướng
-  const [bookedSlots, setBookedSlots] = useState([
-    // Dữ liệu giả lập (dùng nếu chưa có Firebase)
-    { date: '2025-06-07', time: '09:00' },
-    { date: '2025-06-07', time: '10:00' },
-  ]);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedTime, setSelectedTime] = useState('');
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const { id } = useLocalSearchParams();
+  const [selectedBookingDate, setSelectedBookingDate] = useState(
+    moment().tz("Asia/Ho_Chi_Minh").format("YYYY-MM-DD")
+  );
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
+  const [currentTime, setCurrentTime] = useState(
+    moment().tz("Asia/Ho_Chi_Minh").toDate()
+  );
   const [modalVisible, setModalVisible] = useState(false);
-  const [modalMessage, setModalMessage] = useState('');
+  const [modalMessage, setModalMessage] = useState("");
   const [isSuccess, setIsSuccess] = useState(true);
+  const [timeSlots, setTimeSlots] = useState([]);
+  const [bookedSlots, setBookedSlots] = useState([]);
+  const [userBookedTimeSlots, setUserBookedTimeSlots] = useState([]);
 
-  // Danh sách khung giờ (chỉ giờ chẵn từ 08:00 đến 22:00)
-  const timeSlots = [];
-  for (let hour = 8; hour <= 22; hour++) {
-    timeSlots.push(`${hour < 10 ? '0' + hour : hour}:00`);
-  }
-
-  // Lấy danh sách lịch đã đặt từ Firebase
+  // Lấy openTime, closeTime, slot đã đặt và lịch của người dùng
   useEffect(() => {
-    const fetchBookedSlots = async () => {
+    const fetchSpaDataAndAppointments = async () => {
       try {
-        const bookingsSnapshot = await getDocs(collection(db, `spas/${idSpa}/bookings`));
-        const slots = bookingsSnapshot.docs.map((doc) => ({
-          date: doc.data().date,
-          time: doc.data().time,
-        }));
-        setBookedSlots(slots);
+        const user = auth.currentUser;
+        if (!user) {
+          throw new Error("Vui lòng đăng nhập để chọn lịch.");
+        }
+
+        // Lấy openTime và closeTime của spa
+        const spaDoc = await getDoc(doc(db, "spas", id));
+        if (!spaDoc.exists()) {
+          throw new Error("Không tìm thấy thông tin spa.");
+        }
+
+        const { openTime, closeTime } = spaDoc.data();
+        if (!openTime || !closeTime) {
+          throw new Error("Thông tin giờ hoạt động của spa không hợp lệ.");
+        }
+
+        // Phân tích thời gian theo múi giờ UTC+7
+        const open = moment.tz(openTime, "Asia/Ho_Chi_Minh");
+        const close = moment.tz(closeTime, "Asia/Ho_Chi_Minh");
+
+        // Tính closeTime - 1 tiếng
+        const adjustedClose = close.clone().subtract(1, "hour");
+
+        // Tạo danh sách khung giờ cách nhau 30 phút
+        const slots = [];
+        let current = open.clone();
+        while (current.isSameOrBefore(adjustedClose)) {
+          slots.push(current.format("HH:mm"));
+          current.add(30, "minutes");
+        }
+        setTimeSlots(slots);
+
+        // Lấy danh sách lịch đã đặt từ appointments (tất cả người dùng cho spa này)
+        const appointmentsSnapshot = await getDocs(
+          query(
+            collection(db, "appointments"),
+            where("spaId", "==", id),
+            where("status", "in", ["pending", "confirmed"])
+          )
+        );
+        const slotsBooked = appointmentsSnapshot.docs
+          .filter((doc) => {
+            const data = doc.data();
+            let bookingDate;
+            try {
+              bookingDate = moment(data.bookingDate)
+                .tz("Asia/Ho_Chi_Minh")
+                .format("YYYY-MM-DD");
+            } catch (error) {
+              return false;
+            }
+            return bookingDate === selectedBookingDate;
+          })
+          .map((doc) => ({
+            bookingDate: moment(doc.data().bookingDate)
+              .tz("Asia/Ho_Chi_Minh")
+              .format("YYYY-MM-DD"),
+            timeSlot: doc.data().timeSlot,
+          }));
+        setBookedSlots(slotsBooked);
+
+        // Lấy danh sách khung giờ người dùng hiện tại đã đặt
+        const userAppointmentsSnapshot = await getDocs(
+          query(
+            collection(db, "appointments"),
+            where("userId", "==", user.uid),
+            where("spaId", "==", id),
+            where("status", "in", ["pending", "confirmed"])
+          )
+        );
+
+        const userBookedTimes = userAppointmentsSnapshot.docs
+          .filter((doc) => {
+            const data = doc.data();
+            let bookingDate;
+            try {
+              bookingDate = moment(data.bookingDate)
+                .tz("Asia/Ho_Chi_Minh")
+                .format("YYYY-MM-DD");
+            } catch (error) {
+              return false;
+            }
+            return bookingDate === selectedBookingDate;
+          })
+          .map((doc) => doc.data().timeSlot);
+        setUserBookedTimeSlots(userBookedTimes);
       } catch (error) {
-        console.error('Lỗi lấy lịch đặt:', error);
-        // Giữ dữ liệu giả lập nếu Firebase lỗi
+        setModalMessage(error.message || "Không thể tải thông tin spa.");
+        setIsSuccess(false);
+        setModalVisible(true);
+        setTimeSlots(["09:00", "09:30", "10:00", "10:30", "11:00", "11:30"]);
         setBookedSlots([
-          { date: '2025-06-07', time: '09:00' },
-          { date: '2025-06-07', time: '10:00' },
+          { bookingDate: "2025-06-07", timeSlot: "09:00" },
+          { bookingDate: "2025-06-07", timeSlot: "10:00" },
         ]);
       }
     };
-    if (idSpa) {
-      fetchBookedSlots();
+    if (id) {
+      fetchSpaDataAndAppointments();
+    } else {
+      setModalMessage("ID spa không hợp lệ.");
+      setIsSuccess(false);
+      setModalVisible(true);
+      setTimeSlots(["09:00", "09:30", "10:00", "10:30", "11:00", "11:30"]);
     }
-  }, [idSpa]);
+  }, [id, selectedBookingDate]);
 
   // Cập nhật thời gian hiện tại mỗi giây
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime(new Date());
+      setCurrentTime(moment().tz("Asia/Ho_Chi_Minh").toDate());
     }, 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const today = currentTime.toISOString().split('T')[0];
+  const today = moment().tz("Asia/Ho_Chi_Minh").format("YYYY-MM-DD");
 
   // Xử lý chọn ngày
   const handleDayPress = (day) => {
-    setSelectedDate(day.dateString);
-    setSelectedTime('');
+    setSelectedBookingDate(day.dateString);
+    setSelectedTimeSlot("");
   };
 
   // Xử lý chọn khung giờ
   const handleTimePress = (time) => {
-    setSelectedTime(time);
+    setSelectedTimeSlot(time);
   };
 
   // Định dạng ngày (DD/MM/YYYY)
   const formatDate = (dateString) => {
-    if (!dateString) return '';
-    const [year, month, day] = dateString.split('-');
+    if (!dateString) return "";
+    const [year, month, day] = dateString.split("-");
     return `${day}/${month}/${year}`;
   };
 
-  // Xác nhận chọn lịch
+  // Xác nhận chọn ngày và giờ
   const handleBookingConfirm = () => {
-    if (selectedDate && selectedTime) {
-      router.back({
-        params: {
-          date: selectedDate,
-          time: selectedTime,
-        },
-      });
+    if (selectedBookingDate && selectedTimeSlot) {
+      setModalMessage("Đã chọn ngày và giờ!");
+      setIsSuccess(true);
+      setModalVisible(true);
+
+      // Điều hướng lại SpaBooking với params
+      setTimeout(() => {
+        router.replace(
+          `/user/booking?id=${id}&bookingDate=${selectedBookingDate}&timeSlot=${selectedTimeSlot}`
+        );
+        setModalVisible(false);
+      }, 1000);
     } else {
-      setModalMessage('Vui lòng chọn ngày và giờ');
+      setModalMessage("Vui lòng chọn ngày và giờ");
       setIsSuccess(false);
       setModalVisible(true);
     }
@@ -108,30 +236,35 @@ const CalendarScreen = () => {
 
   // Kiểm tra khung giờ có bị vô hiệu hóa không
   const isTimeDisabled = (time) => {
-    const [hour, minute] = time.split(':').map(Number);
-    const selectedDateObj = new Date(selectedDate);
-    const todayDate = new Date(today);
-    const nowPlusOneHour = new Date(currentTime.getTime() + 60 * 60 * 1000);
+    const selectedDateMoment = moment.tz(
+      selectedBookingDate,
+      "Asia/Ho_Chi_Minh"
+    );
+    const todayMoment = moment.tz(today, "Asia/Ho_Chi_Minh");
+    const nowPlusTwoHours = moment
+      .tz(currentTime, "Asia/Ho_Chi_Minh")
+      .add(2, "hours");
 
     // Vô hiệu hóa nếu ngày đã qua
-    if (selectedDateObj < todayDate.setHours(0, 0, 0, 0)) return true;
+    if (selectedDateMoment.isBefore(todayMoment, "day")) return true;
 
-    // Vô hiệu hóa nếu khung giờ trong quá khứ (ngày hiện tại)
-    if (selectedDate === today) {
-      const currentHourPlusOne = nowPlusOneHour.getHours();
-      const currentMinutePlusOne = nowPlusOneHour.getMinutes();
-      if (
-        hour < currentHourPlusOne ||
-        (hour === currentHourPlusOne && minute <= currentMinutePlusOne)
-      ) {
-        return true;
-      }
-    }
-
-    // Vô hiệu hóa nếu khung giờ đã được đặt
-    return bookedSlots.some(
-      (slot) => slot.date === selectedDate && slot.time === time
+    // Vô hiệu hóa nếu khung giờ trước thời điểm hiện tại + 2 tiếng
+    const slotTime = moment.tz(
+      `${selectedBookingDate} ${time}`,
+      "YYYY-MM-DD HH:mm",
+      "Asia/Ho_Chi_Minh"
     );
+    if (slotTime.isBefore(nowPlusTwoHours)) return true;
+
+    // Vô hiệu hóa nếu khung giờ đã được đặt (chỉ tính pending và confirmed)
+    return bookedSlots.some(
+      (slot) => slot.bookingDate === selectedBookingDate && slot.timeSlot === time
+    );
+  };
+
+  // Kiểm tra khung giờ có được người dùng đặt không
+  const isUserBookedTime = (time) => {
+    return userBookedTimeSlots.includes(time);
   };
 
   // Đóng modal
@@ -139,16 +272,31 @@ const CalendarScreen = () => {
     setModalVisible(false);
   };
 
+  // Chỉ đánh dấu ngày được chọn
+  const markedDates = {
+    [selectedBookingDate]: {
+      selected: true,
+      selectedColor: "#FF69B4",
+    },
+  };
+
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right', 'top']}>
-      <StatusBar backgroundColor="transparent" barStyle="light-content" translucent={true} />
+    <SafeAreaView style={styles.container} edges={["left", "right", "top"]}>
+      <StatusBar
+        backgroundColor="transparent"
+        barStyle="light-content"
+        translucent={true}
+      />
       <LinearGradient
-        colors={['#FF69B4', '#FF1493']}
+        colors={[Colors.pink, Colors.pink, "#fff"]}
         style={styles.gradientBackground}
       >
         <View style={styles.headerContainer}>
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Chọn thời gian</Text>
@@ -162,25 +310,20 @@ const CalendarScreen = () => {
           <View style={styles.calendarBlock}>
             <Calendar
               current={today}
+              minDate={today}
               onDayPress={handleDayPress}
-              markedDates={{
-                [selectedDate]: { selected: true, selectedColor: '#FF69B4' },
-                [today]: {
-                  marked: true,
-                  dotColor: '#FF69B4',
-                  selected: selectedDate === today,
-                  selectedColor: '#FF69B4',
-                },
-              }}
+              markedDates={markedDates}
+              firstDay={0}
+              locale="vi"
               theme={{
-                calendarBackground: '#fff',
-                selectedDayBackgroundColor: '#FF69B4',
-                selectedDayTextColor: '#fff',
-                todayTextColor: '#FF69B4',
-                dayTextColor: '#333',
-                textDisabledColor: '#D1D5DB',
-                monthTextColor: '#333',
-                textMonthFontWeight: '500',
+                calendarBackground: "#fff",
+                selectedDayBackgroundColor: "#FF69B4",
+                selectedDayTextColor: "#fff",
+                todayTextColor: "#FF69B4",
+                dayTextColor: "#333",
+                textDisabledColor: "#D1D5DB",
+                monthTextColor: "#333",
+                textMonthFontWeight: "500",
               }}
             />
           </View>
@@ -190,26 +333,41 @@ const CalendarScreen = () => {
             <View style={styles.timeGrid}>
               {timeSlots.map((time) => {
                 const disabled = isTimeDisabled(time);
+                const userBooked = isUserBookedTime(time);
                 return (
                   <TouchableOpacity
                     key={time}
                     style={[
                       styles.timeSlot,
-                      selectedTime === time && !disabled && styles.selectedTimeSlot,
+                      selectedTimeSlot === time &&
+                        !disabled &&
+                        styles.selectedTimeSlot,
                       disabled && styles.disabledTimeSlot,
                     ]}
                     onPress={() => !disabled && handleTimePress(time)}
                     disabled={disabled}
                   >
-                    <Text
-                      style={[
-                        styles.timeText,
-                        selectedTime === time && !disabled ? styles.selectedTimeText : null,
-                        disabled ? styles.disabledTimeText : null,
-                      ]}
-                    >
-                      {time}
-                    </Text>
+                    <View style={styles.timeSlotContent}>
+                      <Text
+                        style={[
+                          styles.timeText,
+                          selectedTimeSlot === time && !disabled
+                            ? styles.selectedTimeText
+                            : null,
+                          disabled ? styles.disabledTimeText : null,
+                        ]}
+                      >
+                        {time}
+                      </Text>
+                      {userBooked && (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={16}
+                          color="#22C55E"
+                          style={styles.checkIcon}
+                        />
+                      )}
+                    </View>
                   </TouchableOpacity>
                 );
               })}
@@ -219,13 +377,14 @@ const CalendarScreen = () => {
           <TouchableOpacity
             style={[
               styles.confirmButton,
-              (!selectedTime || isTimeDisabled(selectedTime)) && styles.disabledButton,
+              (!selectedTimeSlot || isTimeDisabled(selectedTimeSlot)) &&
+                styles.disabledButton,
             ]}
             onPress={handleBookingConfirm}
-            disabled={!selectedTime || isTimeDisabled(selectedTime)}
+            disabled={!selectedTimeSlot || isTimeDisabled(selectedTimeSlot)}
           >
             <LinearGradient
-              colors={['#FF69B4', '#FF1493']}
+              colors={["#FF69B4", "#FF1493"]}
               style={styles.confirmButtonGradient}
             >
               <Text style={styles.confirmButtonText}>Xác nhận</Text>
@@ -242,19 +401,19 @@ const CalendarScreen = () => {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
               <Ionicons
-                name={isSuccess ? 'checkmark-circle' : 'warning'}
+                name={isSuccess ? "checkmark-circle" : "warning"}
                 size={40}
-                color={isSuccess ? '#22C55E' : '#EF4444'}
+                color={isSuccess ? "#22C55E" : "#EF4444"}
                 style={styles.modalIcon}
               />
               <Text style={styles.modalTitle}>
-                {isSuccess ? 'Thành công' : 'Lỗi'}
+                {isSuccess ? "Thông báo" : "Lỗi"}
               </Text>
               <Text style={styles.modalMessage}>{modalMessage}</Text>
               <TouchableOpacity
                 style={[
                   styles.modalButton,
-                  { backgroundColor: isSuccess ? '#FF69B4' : '#999' },
+                  { backgroundColor: isSuccess ? "#FF69B4" : "#999" },
                 ]}
                 onPress={closeModal}
               >
@@ -276,23 +435,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerContainer: {
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0,
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight || 0 : 0,
     zIndex: 10,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 15,
     paddingVertical: 10,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   backButton: {
     marginRight: 10,
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '500',
-    color: '#fff',
+    fontWeight: "500",
+    color: "#fff",
   },
   scrollView: {
     flex: 1,
@@ -300,25 +459,25 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 10,
     paddingBottom: 20,
-    paddingTop: 60, // Tăng paddingTop để tránh che khuất tiêu đề
+    paddingTop: 40,
   },
   calendarBlock: {
-    backgroundColor: '#fff',
-    marginVertical: 5,
+    backgroundColor: "#fff",
+    marginVertical: 15,
     borderRadius: 10,
     padding: 15,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
   timeBlock: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     marginVertical: 5,
     borderRadius: 10,
     padding: 15,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -326,97 +485,104 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: "500",
     marginBottom: 10,
-    color: '#333',
+    color: "#333",
   },
   timeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
   },
   timeSlot: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: "#F9FAFB",
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderRadius: 8,
     marginBottom: 10,
-    width: '30%',
-    alignItems: 'center',
+    width: "30%",
+    alignItems: "center",
+  },
+  timeSlotContent: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   selectedTimeSlot: {
-    backgroundColor: '#FF69B4',
+    backgroundColor: "#FF69B4",
   },
   disabledTimeSlot: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: "#E5E7EB",
   },
   timeText: {
     fontSize: 16,
-    color: '#333',
+    color: "#333",
   },
   selectedTimeText: {
-    color: '#fff',
-    fontWeight: '500',
+    color: "#fff",
+    fontWeight: "500",
   },
   disabledTimeText: {
-    color: '#999',
+    color: "#999",
+  },
+  checkIcon: {
+    marginLeft: 5,
   },
   confirmButton: {
     borderRadius: 10,
-    overflow: 'hidden',
+    overflow: "hidden",
     marginVertical: 10,
   },
   confirmButtonGradient: {
     paddingVertical: 15,
-    alignItems: 'center',
+    alignItems: "center",
   },
   confirmButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 18,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   disabledButton: {
     opacity: 0.5,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 10,
     padding: 20,
-    width: '80%',
-    alignItems: 'center',
+    width: "80%",
+    alignItems: "center",
   },
   modalIcon: {
     marginBottom: 10,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '500',
-    color: '#333',
+    fontWeight: "500",
+    color: "#333",
     marginBottom: 10,
   },
   modalMessage: {
     fontSize: 16,
-    color: '#333',
-    textAlign: 'center',
+    color: "#333",
+    textAlign: "center",
     marginBottom: 20,
   },
   modalButton: {
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 8,
-    width: '100%',
-    alignItems: 'center',
+    width: "100%",
+    alignItems: "center",
   },
   modalButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: "500",
   },
 });
 

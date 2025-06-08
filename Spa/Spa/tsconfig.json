@@ -1,0 +1,45 @@
+// {
+//   "extends": "expo/tsconfig.base",
+//   "compilerOptions": {
+//     "strict": true,
+//     "paths": {
+//       "@/*": [
+//         "./*"
+//       ]
+//     }
+//   },
+//   "include": [
+//     "**/*.ts",
+//     "**/*.tsx",
+//     ".expo/types/**/*.ts",
+//     "expo-env.d.ts"
+//   ]
+// }
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,                     // Bật chế độ nghiêm ngặt của TypeScript
+    "target": "esnext",                 // Mục tiêu biên dịch là ES mới nhất
+    "module": "commonjs",               // Hỗ trợ module trong React Native
+    "jsx": "react-native",              // Hỗ trợ JSX cho React Native
+    "esModuleInterop": true,            // Hỗ trợ nhập module không chuẩn
+    "skipLibCheck": true,               // Bỏ qua kiểm tra file định nghĩa thư viện
+    "forceConsistentCasingInFileNames": true, // Đảm bảo tên file đồng nhất
+    "baseUrl": ".",                     // Đặt thư mục gốc cho alias
+    "paths": {
+      "@/*": ["./*"],                   // Alias cho toàn bộ file từ thư mục gốc
+      "@assets/*": ["assets/*"]         // Thêm alias cho thư mục assets
+    }
+  },
+  "include": [
+    "**/*.ts",                          // Bao gồm tất cả file .ts
+    "**/*.tsx",                         // Bao gồm tất cả file .tsx
+    ".expo/types/**/*.ts",              // File định nghĩa của Expo
+    "expo-env.d.ts"                     // File môi trường của Expo
+, "app/(tabs)/index.jsx", "src/firebaseConfig.js", "app/(tabs)/_layout.jsx", "app/(tabs)/login.jsx", "app/user/_layout.jsx"  ],
+  "exclude": [
+    "node_modules",                     // Loại trừ thư mục node_modules
+    "babel.config.js",                  // Loại trừ file config Babel
+    "metro.config.js"                   // Loại trừ file config Metro
+  ]
+}

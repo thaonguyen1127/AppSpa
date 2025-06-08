@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,54 +6,53 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Alert,
   StatusBar,
   Platform,
   Modal,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { addDoc, collection } from "firebase/firestore";
-import { db, auth } from "../../src/firebaseConfig";
-import { useFocusEffect } from "@react-navigation/native";
-import { Colors } from "@/constants/Colors";
-import { Timestamp } from "firebase/firestore";
-import { LinearGradient } from "expo-linear-gradient";
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { addDoc, collection } from 'firebase/firestore';
+import { db } from '../../src/firebaseConfig';
+import { useFocusEffect } from '@react-navigation/native';
+import { Colors } from '@/constants/Colors';
 
 const SpaBooking = () => {
   const router = useRouter();
-  const { id, bookingDate, timeSlot } = useLocalSearchParams();
+  const { id, date, time } = useLocalSearchParams();
   const [formData, setFormData] = useState({
-    fullName: "",
-    phoneNumber: "",
-    note: "",
-    selectedBookingDate: "",
-    selectedTimeSlot: "",
+    fullName: '',
+    phoneNumber: '',
+    notes: '',
+    selectedDate: '',
+    selectedTime: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false); // Modal lỗi
-  const [successModalVisible, setSuccessModalVisible] = useState(false); // Modal thành công
+  const [modalVisible, setModalVisible] = useState(false);
   const HEADER_HEIGHT = 50;
 
   // Kiểm tra id khi khởi tạo
   useEffect(() => {
     if (!id) {
-      setModalVisible(true);
+      Alert.alert('Lỗi', 'ID spa không hợp lệ', [
+        { text: 'Quay lại', onPress: () => router.back() },
+      ]);
     }
-  }, [id]);
+  }, [id, router]);
 
   // Lắng nghe kết quả từ CalendarScreen
   useFocusEffect(
     useCallback(() => {
-      // console.log("Received params:", { bookingDate, timeSlot });
-      if (bookingDate && timeSlot) {
+      if (date && time) {
         setFormData((prev) => ({
           ...prev,
-          selectedBookingDate: bookingDate,
-          selectedTimeSlot: timeSlot,
+          selectedDate: date,
+          selectedTime: time,
         }));
       }
-    }, [bookingDate, timeSlot])
+    }, [date, time])
   );
 
   const handleInputChange = (field, value) => {
@@ -65,26 +64,20 @@ const SpaBooking = () => {
 
   const handleSubmit = async () => {
     if (!id) {
-      setModalVisible(true);
+      Alert.alert('Lỗi', 'ID spa không hợp lệ');
       return;
     }
     if (
       !formData.fullName ||
       !formData.phoneNumber ||
-      !formData.selectedBookingDate ||
-      !formData.selectedTimeSlot
+      !formData.selectedDate ||
+      !formData.selectedTime
     ) {
       setModalVisible(true);
       return;
     }
     if (!/^[0-9]{10}$/.test(formData.phoneNumber)) {
-      setModalVisible(true);
-      return;
-    }
-
-    const user = auth.currentUser;
-    if (!user) {
-      setModalVisible(true);
+      Alert.alert('Lỗi', 'Số điện thoại phải gồm 10 chữ số');
       return;
     }
 
@@ -92,20 +85,20 @@ const SpaBooking = () => {
     try {
       const bookingData = {
         spaId: id,
-        userId: user.uid,
         fullName: formData.fullName,
         phoneNumber: formData.phoneNumber,
-        note: formData.note || "",
-        bookingDate: formData.selectedBookingDate,
-        timeSlot: formData.selectedTimeSlot,
-        status: "pending",
-        createdAt: Timestamp.now(),
+        notes: formData.notes || '',
+        date: formData.selectedDate,
+        time: formData.selectedTime,
+        createdAt: new Date().toISOString(),
       };
-      await addDoc(collection(db, "appointments"), bookingData);
-      setSuccessModalVisible(true); // Hiển thị modal thành công
+      await addDoc(collection(db, `spas/${id}/bookings`), bookingData);
+      Alert.alert('Thành công', 'Đặt lịch thành công!', [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
     } catch (error) {
-      console.error("Lỗi khi đặt lịch:", error);
-      setModalVisible(true);
+      console.error('Lỗi khi đặt lịch:', error);
+      Alert.alert('Lỗi', 'Đã có lỗi xảy ra. Vui lòng thử lại.');
     } finally {
       setIsSubmitting(false);
     }
@@ -113,30 +106,25 @@ const SpaBooking = () => {
 
   const handleSelectTime = () => {
     if (!id) {
-      setModalVisible(true);
+      Alert.alert('Lỗi', 'ID spa không hợp lệ');
       return;
     }
     try {
       router.push(`/user/calendar?id=${id}`);
     } catch (err) {
-      console.error("Lỗi điều hướng:", err);
-      setModalVisible(true);
+      console.error('Lỗi điều hướng:', err);
+      Alert.alert('Lỗi', 'Không thể mở lịch: ' + err.message);
     }
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return "";
-    const [year, month, day] = dateString.split("-");
+    if (!dateString) return '';
+    const [year, month, day] = dateString.split('-');
     return `${day}/${month}/${year}`;
   };
 
-  const closeSuccessModal = () => {
-    setSuccessModalVisible(false);
-    router.replace("/user/(tabs)/booked"); // Điều hướng sang lịch sử đặt lịch
-  };
-
   return (
-    <SafeAreaView style={styles.container} edges={["left", "right"]}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <StatusBar
         backgroundColor="transparent"
         barStyle="dark-content"
@@ -144,10 +132,7 @@ const SpaBooking = () => {
       />
       <View style={styles.headerContainer}>
         <View style={[styles.header, { height: HEADER_HEIGHT }]}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Đặt lịch tư vấn</Text>
@@ -167,14 +152,14 @@ const SpaBooking = () => {
                 placeholder="Họ và tên"
                 placeholderTextColor="#999"
                 value={formData.fullName}
-                onChangeText={(text) => handleInputChange("fullName", text)}
+                onChangeText={(value) => handleInputChange('fullName', value)}
               />
               <TextInput
                 style={styles.input}
                 placeholder="Số điện thoại"
                 placeholderTextColor="#999"
                 value={formData.phoneNumber}
-                onChangeText={(text) => handleInputChange("phoneNumber", text)}
+                onChangeText={(value) => handleInputChange('phoneNumber', value)}
                 keyboardType="phone-pad"
               />
             </View>
@@ -188,9 +173,9 @@ const SpaBooking = () => {
             </View>
             <TouchableOpacity style={styles.timeButton} onPress={handleSelectTime}>
               <Text style={styles.timeButtonText}>
-                {formData.selectedBookingDate && formData.selectedTimeSlot
-                  ? `${formatDate(formData.selectedBookingDate)} - ${formData.selectedTimeSlot}`
-                  : "Chọn thời gian"}
+                {formData.selectedDate && formData.selectedTime
+                  ? `${formData.selectedTime} - ${formatDate(formData.selectedDate)}`
+                  : 'Chọn thời gian'}
               </Text>
               <Ionicons name="chevron-forward" size={20} color="#999" />
             </TouchableOpacity>
@@ -206,8 +191,8 @@ const SpaBooking = () => {
               style={[styles.input, styles.notesInput]}
               placeholder="Ghi chú thêm về dịch vụ bạn muốn sử dụng..."
               placeholderTextColor="#999"
-              value={formData.note}
-              onChangeText={(text) => handleInputChange("note", text)}
+              value={formData.notes}
+              onChangeText={(value) => handleInputChange('notes', value)}
               multiline
               numberOfLines={4}
             />
@@ -218,24 +203,19 @@ const SpaBooking = () => {
             <Text style={styles.summaryTitle}>Thông tin đặt lịch</Text>
             <View style={styles.summaryContent}>
               {formData.fullName ? (
-                <Text style={styles.summaryText}>
-                  Tên: {formData.fullName}
-                </Text>
+                <Text style={styles.summaryText}>Tên: {formData.fullName}</Text>
               ) : null}
               {formData.phoneNumber ? (
+                <Text style={styles.summaryText}>SĐT: {formData.phoneNumber}</Text>
+              ) : null}
+              {formData.selectedDate && formData.selectedTime ? (
                 <Text style={styles.summaryText}>
-                  SĐT: {formData.phoneNumber}
+                  Thời gian: {formData.selectedTime} - {formatDate(formData.selectedDate)}
                 </Text>
               ) : null}
-              {formData.selectedBookingDate && formData.selectedTimeSlot ? (
-                <Text style={styles.summaryText}>
-                  Thời gian: {formData.selectedTimeSlot} -{" "}
-                  {formatDate(formData.selectedBookingDate)}
-                </Text>
-              ) : null}
-              {/* {id ? (
+              {id ? (
                 <Text style={styles.summaryText}>Name Spa: {id}</Text>
-              ) : null} */}
+              ) : null}
             </View>
           </View>
 
@@ -247,18 +227,16 @@ const SpaBooking = () => {
               {
                 backgroundColor: Colors.pink,
               },
-              isSubmitting && styles.disabledButton,
             ]}
-            disabled={isSubmitting}
           >
             <Text style={styles.submitButtonText}>
-              {isSubmitting ? "Đang xử lý..." : "Đặt lịch tư vấn"}
+              {isSubmitting ? 'Đang xử lý...' : 'Đặt lịch tư vấn'}
             </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {/* Modal lỗi */}
+      {/* Modal thông báo */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -267,57 +245,12 @@ const SpaBooking = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Ionicons
-              name="warning"
-              size={40}
-              color="#EF4444"
-              style={styles.modalIcon}
-            />
-            <Text style={styles.modalTitle}>Lỗi</Text>
-            <Text style={styles.modalText}>
-              Vui lòng điền đầy đủ thông tin bắt buộc hoặc kiểm tra lại.
-            </Text>
+            <Text style={styles.modalText}>Vui lòng điền đầy đủ thông tin bắt buộc</Text>
             <TouchableOpacity
               style={styles.modalButton}
               onPress={() => setModalVisible(false)}
             >
               <Text style={styles.modalButtonText}>OK</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Modal thành công */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={successModalVisible}
-        onRequestClose={closeSuccessModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Ionicons
-              name="checkmark-circle"
-              size={50}
-              color="#22C55E"
-              style={styles.modalIcon}
-            />
-            <Text style={styles.modalTitle}>Đặt lịch thành công!</Text>
-            <Text style={styles.modalText}>
-              Lịch của bạn đã được đặt vào{" "}
-              {formData.selectedTimeSlot} -{" "}
-              {formatDate(formData.selectedBookingDate)}.
-            </Text>
-            <TouchableOpacity
-              style={styles.modalButton}
-              onPress={closeSuccessModal}
-            >
-              <LinearGradient
-                colors={["#FF69B4", "#FF1493"]}
-                style={styles.modalButtonGradient}
-              >
-                <Text style={styles.modalButtonText}>Xem lịch sử</Text>
-              </LinearGradient>
             </TouchableOpacity>
           </View>
         </View>
@@ -329,20 +262,20 @@ const SpaBooking = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8F9FA",
+    backgroundColor: '#F8F9FA',
   },
   headerContainer: {
-    position: "absolute",
+    position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     zIndex: 10,
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight || 0 : 0,
-    backgroundColor: Colors.pink || "#FF69B4",
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0,
+    backgroundColor: Colors.pink || '#FF69B4',
   },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 15,
     paddingVertical: 10,
   },
@@ -351,8 +284,8 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: "bold",
-    color: "#fff",
+    fontWeight: 'bold',
+    color: '#fff',
   },
   scrollView: {
     flex: 1,
@@ -367,25 +300,25 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    shadowColor: "#000",
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
   sectionTitleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
     marginBottom: 18,
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: "500",
-    color: "#FF69B4",
+    fontWeight: '500',
+    color: '#FF69B4',
   },
   inputContainer: {
     marginTop: 8,
@@ -393,40 +326,40 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: '#E5E7EB',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    color: "#333",
+    color: '#333',
   },
   notesInput: {
     height: 100,
-    textAlignVertical: "top",
+    textAlignVertical: 'top',
   },
   timeButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: '#E5E7EB',
     borderRadius: 8,
     padding: 16,
   },
   timeButtonText: {
     fontSize: 16,
-    color: "#666",
+    color: '#666',
   },
   summaryCard: {
-    backgroundColor: "#FFF5F7",
+    backgroundColor: '#FFF5F7',
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#FFE4E1",
+    borderColor: '#FFE4E1',
   },
   summaryTitle: {
     fontSize: 16,
-    fontWeight: "500",
-    color: "#BE185D",
+    fontWeight: '500',
+    color: '#BE185D',
     marginBottom: 8,
   },
   summaryContent: {
@@ -434,62 +367,50 @@ const styles = StyleSheet.create({
   },
   summaryText: {
     fontSize: 14,
-    color: "#DB2777",
+    color: '#DB2777',
   },
   submitButton: {
     borderRadius: 12,
     paddingVertical: 16,
-    alignItems: "center",
+    alignItems: 'center',
   },
-  disabledButton: {
-    opacity: 0.5,
-  },
+  // submitButtonDisabled: {
+  //   opacity: 0.5,
+  // },
   submitButtonText: {
     fontSize: 18,
-    fontWeight: "500",
-    color: "#fff",
+    fontWeight: '500',
+    color: '#fff',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: "#fff",
+    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 20,
-    width: "80%",
-    alignItems: "center",
-  },
-  modalIcon: {
-    marginBottom: 10,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 10,
+    width: '80%',
+    alignItems: 'center',
   },
   modalText: {
     fontSize: 16,
-    color: "#333",
+    color: '#333',
     marginBottom: 20,
-    textAlign: "center",
+    textAlign: 'center',
   },
   modalButton: {
+    backgroundColor: Colors.pink || '#FF69B4',
     borderRadius: 8,
-    width: "100%",
-    overflow: "hidden",
-  },
-  modalButtonGradient: {
-    paddingVertical: 12,
-    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
   },
   modalButtonText: {
     fontSize: 16,
-    color: "#fff",
-    fontWeight: "500",
+    color: '#fff',
+    fontWeight: '500',
   },
 });
 

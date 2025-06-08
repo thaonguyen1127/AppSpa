@@ -23,12 +23,11 @@ import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MapView, { Marker } from 'react-native-maps';
 import { Colors } from '@/constants/Colors';
-import { db, auth } from '../../src/firebaseConfig';
+import { db, firebaseAuth as auth } from '../../src/firebaseConfig'; // Đảm bảo import đúng
 import { collection, addDoc, doc, getDoc, setDoc, getDocs } from 'firebase/firestore';
 import Checkbox from 'expo-checkbox';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSpaContext } from '../../src/context/SpaContext';
-import moment from 'moment-timezone';
 import styles from '../../src/styles/SpaInputStyles';
 
 const HEADER_HEIGHT = 50;
@@ -138,7 +137,7 @@ export default function SpaInputScreen() {
                         (acc, service) => ({
                             ...acc,
                             [service.name]: false,
-                        }),
+                    }),
                         {},
                     );
                     updateAvailableServices(servicesList);
@@ -385,7 +384,7 @@ export default function SpaInputScreen() {
                 return;
             }
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // Tăng timeout lên 5s
             try {
                 const response = await fetch(
                     `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=${API_KEY}&language=vi&countrycode=vn`,
@@ -588,6 +587,8 @@ export default function SpaInputScreen() {
         };
         setCustomServices((prev) => [...prev, newService]);
         setServices((prev) => ({ ...prev, [newService.name]: true }));
+        // Tùy chọn: Lưu dịch vụ tùy chỉnh vào availableServices
+        // updateAvailableServices([...availableServices, { name: newService.name, description: '' }]);
         setNewServiceName('');
         setShowAddService(false);
         setIsFormDirty(true);
@@ -644,29 +645,23 @@ export default function SpaInputScreen() {
         try {
             const user = auth.currentUser;
             if (!user) throw new Error('Vui lòng đăng nhập.');
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            const userDoc = await getDoc(doc(db, 'users', user.uid)); // Sửa 'user' thành 'users'
             if (!userDoc.exists() || userDoc.data().role !== 'owner') {
                 throw new Error('Bạn không có quyền chỉnh sửa spa.');
             }
-
-            // Chuyển đổi openTime và closeTime sang timestamp UTC+7
-            const openTimeUTC7 = moment(openTime).tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DDTHH:mm:ss.SSSZ');
-            const closeTimeUTC7 = moment(closeTime).tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DDTHH:mm:ss.SSSZ');
-            // Lấy thời gian hiện tại theo UTC+7 cho createdAt và updatedAt
-            const nowUTC7 = moment().tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DDTHH:mm:ss.SSSZ');
 
             const spaDataToSave = {
                 name: name.trim(),
                 address: address.trim(),
                 phone: phone.trim(),
-                openTime: openTimeUTC7,
-                closeTime: closeTimeUTC7,
+                openTime: openTime.toISOString(),
+                closeTime: closeTime.toISOString(),
                 description: description.trim(),
                 images,
                 services,
                 slotPerHour: Number(slotsPerHour),
-                createdAt: nowUTC7,
-                updatedAt: nowUTC7,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(), // Thêm updatedAt
                 ownerId: user.uid,
                 coordinates,
                 status: 'pending',
@@ -674,7 +669,7 @@ export default function SpaInputScreen() {
             let docRef;
             if (spaId) {
                 docRef = doc(db, 'spas', spaId);
-                await setDoc(docRef, spaDataToSave, { merge: true });
+                await setDoc(docRef, spaDataToSave, { merge: true }); // Sử dụng merge để an toàn
                 const updatedSpas = spas.map((spa) =>
                     spa.id === spaId ? { id: spaId, ...spaDataToSave } : spa,
                 );
@@ -707,7 +702,7 @@ export default function SpaInputScreen() {
             );
             setTimeout(() => {
                 router.push({ pathname: '/owner/spaDetail', params: { spaId: savedSpaId } });
-            }, 100);
+            }, 100); // Thêm độ trễ nhỏ để đảm bảo điều hướng mượt
         } else {
             setModal({
                 visible: true,
